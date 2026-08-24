@@ -268,24 +268,50 @@ export default function ConversationView({
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
             {thread.messages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.direction === 'out' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
-                    msg.direction === 'out'
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white rounded-br-sm'
-                      : 'bg-white text-slate-800 rounded-bl-sm border border-slate-200'
-                  }`}
-                >
-                  {msg.mediaUrl && (
-                    <img src={msg.mediaUrl} alt="" className="rounded-xl mb-1.5 max-w-[220px] max-h-48 object-cover" />
-                  )}
-                  {msg.body}
-                  <div className={`text-[10px] mt-1 ${msg.direction === 'out' ? 'text-white/70' : 'text-slate-400'} flex items-center gap-1`}>
-                    {msg.time}
-                    {msg.direction === 'out' && msg.status && (
-                      <span>{msg.status === 'sent' ? '✓' : '✓✓'}</span>
+                {msg.mediaUrl ? (
+                  <div className="max-w-[70%]">
+                    <img
+                      src={msg.mediaUrl}
+                      alt=""
+                      className={`rounded-2xl max-w-[260px] max-h-64 object-cover shadow-sm ${msg.direction === 'out' ? '' : 'border border-slate-200'}`}
+                    />
+                    {msg.body && (
+                      <div className={`mt-1.5 ${msg.direction === 'out' ? 'text-right' : ''}`}>
+                        <span
+                          className={`inline-block px-3 py-1.5 rounded-xl text-sm shadow-sm ${
+                            msg.direction === 'out'
+                              ? 'bg-gradient-to-r from-primary to-secondary text-white rounded-br-sm'
+                              : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'
+                          }`}
+                        >
+                          {msg.body}
+                        </span>
+                      </div>
                     )}
+                    <div className={`text-[10px] mt-1 text-slate-400 flex items-center gap-1 ${msg.direction === 'out' ? 'justify-end' : ''}`}>
+                      {msg.time}
+                      {msg.direction === 'out' && msg.status && (
+                        <span>{msg.status === 'sent' ? '✓' : '✓✓'}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div
+                    className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
+                      msg.direction === 'out'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white rounded-br-sm'
+                        : 'bg-white text-slate-800 rounded-bl-sm border border-slate-200'
+                    }`}
+                  >
+                    {msg.body}
+                    <div className={`text-[10px] mt-1 ${msg.direction === 'out' ? 'text-white/70' : 'text-slate-400'} flex items-center gap-1`}>
+                      {msg.time}
+                      {msg.direction === 'out' && msg.status && (
+                        <span>{msg.status === 'sent' ? '✓' : '✓✓'}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {thread.messages.length === 0 && (
