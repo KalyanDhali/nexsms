@@ -251,7 +251,7 @@ export default function ConversationView({
             )}
           </div>
 
-          {composerBar(submitCompose, recipients.length > 0)}
+          {recipients.length > 0 && composerBar(submitCompose, true)}
         </div>
       ) : !thread ? (
         <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
