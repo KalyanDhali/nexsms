@@ -101,17 +101,17 @@ export default function KeypadPanel({
         )}
       </div>
 
-      <div className="px-4 pt-2">
-        <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+      <div className="px-4 pt-3">
+        <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
           {KEYS.map(([digit, letters]) => (
             <button
               key={digit}
               type="button"
               onClick={() => onKey(digit)}
-              className="py-1.5 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition flex flex-col items-center"
+              className="py-3 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition flex flex-col items-center"
             >
-              <span className="text-lg font-medium text-slate-700 leading-none">{digit}</span>
-              {letters && <span className="text-[9px] tracking-widest text-slate-400 mt-0.5">{letters}</span>}
+              <span className="text-xl font-bold text-slate-700 leading-none">{digit}</span>
+              {letters && <span className="text-[9px] tracking-widest text-slate-400 mt-1 font-medium">{letters}</span>}
             </button>
           ))}
         </div>
