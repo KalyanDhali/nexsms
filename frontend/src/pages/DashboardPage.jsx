@@ -99,14 +99,15 @@ export default function DashboardPage() {
   const active = threads.find((th) => th.id === activeThread);
 
   const sendMessage = (body, mediaUrl = null) => {
-    if (!body.trim()) return;
+    if (!body.trim() && !mediaUrl) return;
+    const preview = body.trim() || (isZh ? '图片' : 'Photo');
     setThreads((prev) =>
       prev.map((th) =>
         th.id === activeThread
           ? {
               ...th,
               messages: [...th.messages, { id: Date.now(), direction: 'out', body, mediaUrl, time: 'Now', status: 'sent' }],
-              preview: body,
+              preview,
               lastDirection: 'out',
             }
           : th
@@ -133,6 +134,7 @@ export default function DashboardPage() {
 
   const composeSend = ({ recipients, body, mediaUrl }) => {
     const msg = { id: Date.now(), direction: 'out', body, mediaUrl, time: 'Now', status: 'sent' };
+    const preview = body.trim() || (isZh ? '图片' : 'Photo');
     if (recipients.length === 1) {
       const num = recipients[0];
       const existing = threads.find((th) => th.name === num);
@@ -140,13 +142,13 @@ export default function DashboardPage() {
         setThreads((prev) =>
           prev.map((th) =>
             th.id === existing.id
-              ? { ...th, messages: [...th.messages, msg], preview: body, lastDirection: 'out' }
+              ? { ...th, messages: [...th.messages, msg], preview, lastDirection: 'out' }
               : th
           )
         );
         setActiveThread(existing.id);
       } else {
-        const nt = { id: Date.now(), name: num, preview: body, time: 'Now', unread: 0, lastDirection: 'out', messages: [msg] };
+        const nt = { id: Date.now(), name: num, preview, time: 'Now', unread: 0, lastDirection: 'out', messages: [msg] };
         setThreads((prev) => [nt, ...prev]);
         setActiveThread(nt.id);
       }
@@ -154,7 +156,7 @@ export default function DashboardPage() {
       const nt = {
         id: Date.now(),
         name: recipients.join(', '),
-        preview: body,
+        preview,
         time: 'Now',
         unread: 0,
         lastDirection: 'out',
