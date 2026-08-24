@@ -288,6 +288,8 @@ const migrations = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages (conversation_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_messages_provider_created ON messages (provider_id, created_at)`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_code_hash TEXT`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_code_expires_at TIMESTAMPTZ`,
 ];
 
 export async function runMigrations() {

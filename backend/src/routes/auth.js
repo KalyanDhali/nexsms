@@ -1,18 +1,55 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { query } from '../models/db.js';
 import { hashPassword, comparePassword } from '../utils/password.js';
 import { signAccessToken, signRefreshToken, signTwoFaToken, verifyTwoFaToken } from '../utils/jwt.js';
 import { authenticate } from '../middleware/auth.js';
 import { isIpBlocked, recordLoginIp } from '../services/ipGuard.js';
 import { applyReferralCode } from '../services/referralService.js';
-import { generateSecret, verifyTotp, otpauthUri } from '../services/totp.js';
-import qrcode from 'qrcode';
+import { sendOtpCode } from '../services/mailer.js';
 
 const router = Router();
 
 function clientIp(req) {
   const raw = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
   return raw ? raw.replace(/^::ffff:/, '') : null;
+}
+
+function hashOtp(code, userId) {
+  return crypto.createHash('sha256').update(`${code}:${userId}`).digest('hex');
+}
+
+async function issueOtp(userId, email) {
+  const { rows } = await query(
+    'SELECT two_factor_code_expires_at FROM users WHERE id = $1',
+    [userId]
+  );
+  const last = rows[0]?.two_factor_code_expires_at;
+  if (last && new Date(last).getTime() > Date.now() - 45 * 1000) {
+    return { error: 'Please wait a moment before requesting another code' };
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await query(
+    'UPDATE users SET two_factor_code_hash = $1, two_factor_code_expires_at = NOW() + interval \'10 minutes\', updated_at = NOW() WHERE id = $2',
+    [hashOtp(code, userId), userId]
+  );
+  const { delivered } = await sendOtpCode(email, code);
+  if (!delivered) {
+    console.log(`[2FA] Code for ${email}: ${code}`);
+  }
+  return { sentTo: email, via: delivered ? 'email' : 'console' };
+}
+
+async function checkOtp(userId, code) {
+  const { rows } = await query(
+    'SELECT two_factor_code_hash, two_factor_code_expires_at FROM users WHERE id = $1',
+    [userId]
+  );
+  const row = rows[0];
+  if (!row?.two_factor_code_hash) return false;
+  if (!row.two_factor_code_expires_at || new Date(row.two_factor_code_expires_at).getTime() < Date.now()) return false;
+  const expected = crypto.createHash('sha256').update(`${String(code).trim()}:${userId}`).digest('hex');
+  return expected === row.two_factor_code_hash;
 }
 
 router.post('/register', async (req, res) => {
@@ -71,6 +108,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Account is disabled' });
     }
     if (user.two_factor_enabled) {
+      await issueOtp(user.id, user.email);
       return res.status(200).json({ twoFaRequired: true, twoFaToken: signTwoFaToken(user) });
     }
     const accessToken = signAccessToken(user);
@@ -103,13 +141,14 @@ router.post('/2fa/verify-login', async (req, res) => {
       return res.status(401).json({ error: 'Session expired, please log in again' });
     }
     const { rows } = await query('SELECT * FROM users WHERE id = $1', [payload.sub]);
-    if (!rows.length || !rows[0].two_factor_enabled || !rows[0].two_factor_secret) {
+    if (!rows.length || !rows[0].two_factor_enabled) {
       return res.status(401).json({ error: 'Two-factor is not enabled for this account' });
     }
     const user = rows[0];
-    if (!verifyTotp(user.two_factor_secret, code)) {
-      return res.status(401).json({ error: 'Invalid verification code' });
+    if (!(await checkOtp(user.id, code))) {
+      return res.status(401).json({ error: 'Invalid or expired verification code' });
     }
+    await query('UPDATE users SET two_factor_code_hash = NULL, two_factor_code_expires_at = NULL WHERE id = $1', [user.id]);
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     const ip = clientIp(req);
@@ -173,61 +212,37 @@ router.post('/change-password', authenticate, async (req, res) => {
   }
 });
 
-router.post('/2fa/setup', authenticate, async (req, res) => {
+router.post('/2fa/send-code', authenticate, async (req, res) => {
   try {
-    const secret = generateSecret();
-    const { rows } = await query(
-      'UPDATE users SET two_factor_secret = $1, two_factor_enabled = FALSE, updated_at = NOW() WHERE id = $2 RETURNING email',
-      [secret, req.user.id]
-    );
+    const { rows } = await query('SELECT email FROM users WHERE id = $1', [req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
-    const account = rows[0].email;
-    const uri = otpauthUri(secret, account);
-    const qr = await qrcode.toDataURL(uri);
-    res.json({ secret, otpauth: uri, qr });
+    const result = await issueOtp(req.user.id, rows[0].email);
+    if (result.error) return res.status(429).json({ error: result.error });
+    res.json({ ok: true, sent_to: result.sentTo, via: result.via, expires_in: 600 });
   } catch (err) {
-    console.error('2fa setup error:', err);
+    console.error('2fa send-code error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-router.post('/2fa/verify', authenticate, async (req, res) => {
+router.post('/2fa/verify-code', authenticate, async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Verification code is required' });
-    const { rows } = await query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
-    if (!rows.length || !rows[0].two_factor_secret) {
-      return res.status(400).json({ error: 'No 2FA setup in progress' });
+    const { rows } = await query('SELECT two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    if (!(await checkOtp(req.user.id, code))) {
+      return res.status(401).json({ error: 'Invalid or expired verification code' });
     }
-    if (!verifyTotp(rows[0].two_factor_secret, code)) {
-      return res.status(401).json({ error: 'Invalid verification code' });
-    }
-    await query('UPDATE users SET two_factor_enabled = TRUE, updated_at = NOW() WHERE id = $1', [req.user.id]);
-    res.json({ ok: true, two_factor_enabled: true });
-  } catch (err) {
-    console.error('2fa verify error:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.post('/2fa/disable', authenticate, async (req, res) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'Verification code is required' });
-    const { rows } = await query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
-    if (!rows.length || !rows[0].two_factor_secret) {
-      return res.status(400).json({ error: 'Two-factor is not enabled' });
-    }
-    if (!verifyTotp(rows[0].two_factor_secret, code)) {
-      return res.status(401).json({ error: 'Invalid verification code' });
-    }
+    const currentlyEnabled = rows[0].two_factor_enabled;
+    const next = !currentlyEnabled;
     await query(
-      'UPDATE users SET two_factor_enabled = FALSE, two_factor_secret = NULL, updated_at = NOW() WHERE id = $1',
-      [req.user.id]
+      'UPDATE users SET two_factor_enabled = $1, two_factor_code_hash = NULL, two_factor_code_expires_at = NULL, updated_at = NOW() WHERE id = $2',
+      [next, req.user.id]
     );
-    res.json({ ok: true, two_factor_enabled: false });
+    res.json({ ok: true, two_factor_enabled: next });
   } catch (err) {
-    console.error('2fa disable error:', err);
+    console.error('2fa verify-code error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

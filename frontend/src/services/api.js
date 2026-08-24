@@ -136,7 +136,6 @@ export const removeAdminWhitelist = (ip) => api.delete(`/admin/whitelist/${ip}`)
 
 export const getUserProfile = () => api.get('/auth/profile');
 export const changePassword = (payload) => api.post('/auth/change-password', payload);
-export const setupTwoFactor = () => api.post('/auth/2fa/setup');
-export const verifyTwoFactor = (payload) => api.post('/auth/2fa/verify', payload);
-export const disableTwoFactor = (payload) => api.post('/auth/2fa/disable', payload);
+export const sendTwoFactorCode = () => api.post('/auth/2fa/send-code');
+export const verifyTwoFactorCode = (payload) => api.post('/auth/2fa/verify-code', payload);
 export const verifyTwoFactorLogin = (payload) => api.post('/auth/2fa/verify-login', payload);

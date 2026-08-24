@@ -59,7 +59,7 @@ export default function LoginPage() {
             <>
               <h1 className="text-2xl font-bold text-slate-900 text-center">{T('Two-Factor Authentication', '两步验证')}</h1>
               <p className="mt-2 text-sm text-slate-500 text-center">
-                {T('Enter the 6-digit code from your authenticator app', '请输入您身份验证器应用中的 6 位代码')}
+                {T('Enter the 6-digit code sent to your email', '请输入发送到您邮箱的 6 位代码')}
               </p>
               <form onSubmit={handleCode} className="mt-8 space-y-4">
                 <input
