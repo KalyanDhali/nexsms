@@ -133,3 +133,7 @@ export const revokeAdminApiKey = (id) => api.post(`/admin/keys/${id}/revoke`);
 export const getAdminWhitelist = () => api.get('/admin/whitelist');
 export const addAdminWhitelist = (payload) => api.post('/admin/whitelist', payload);
 export const removeAdminWhitelist = (ip) => api.delete(`/admin/whitelist/${ip}`);
+
+export const getUserProfile = () => api.get('/auth/profile');
+export const changePassword = (payload) => api.post('/auth/change-password', payload);
+export const toggleTwoFactor = () => api.post('/auth/toggle-2fa');

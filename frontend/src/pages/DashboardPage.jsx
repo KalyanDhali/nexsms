@@ -7,6 +7,7 @@ import NavSidebar from '../components/chat/NavSidebar.jsx';
 import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
 import KeypadPanel from '../components/chat/KeypadPanel.jsx';
+import ProfileMenu from '../components/chat/ProfileMenu.jsx';
 import CallsPanel from '../components/chat/CallsPanel.jsx';
 import EmptyListPanel from '../components/chat/EmptyListPanel.jsx';
 import SettingsView from '../components/chat/SettingsView.jsx';
@@ -68,7 +69,7 @@ const mockThreads = [
 ];
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
@@ -306,12 +307,7 @@ export default function DashboardPage() {
               Admin
             </a>
           )}
-          <button
-            onClick={logout}
-            className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
-          >
-            {isZh ? '退出' : 'Logout'}
-          </button>
+          <ProfileMenu />
         </div>
       </header>
 

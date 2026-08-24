@@ -109,4 +109,80 @@ router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 
+router.post('/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const ok = await comparePassword(currentPassword, rows[0].password);
+    if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
+    const hashed = await hashPassword(newPassword);
+    await query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashed, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('change-password error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/toggle-2fa', authenticate, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'UPDATE users SET two_factor_enabled = NOT two_factor_enabled, updated_at = NOW() WHERE id = $1 RETURNING two_factor_enabled',
+      [req.user.id]
+    );
+    res.json({ two_factor_enabled: rows[0]?.two_factor_enabled ?? false });
+  } catch (err) {
+    console.error('toggle-2fa error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/profile', authenticate, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT id, email, name, role, status, balance, currency, billing_mode, kyc_status, avatar, two_factor_enabled, api_key, created_at FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const user = rows[0];
+
+    const [smsRes, numsRes, planRes] = await Promise.all([
+      query(
+        `SELECT COUNT(*)::int AS sms_sent
+         FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE c.user_id = $1 AND m.direction = 'out'`,
+        [req.user.id]
+      ),
+      query('SELECT COUNT(*)::int AS active_numbers FROM numbers WHERE assigned_user_id = $1', [req.user.id]),
+      query(
+        `SELECT p.name FROM subscriptions s
+         JOIN plans p ON p.id = s.plan_id
+         WHERE s.user_id = $1 AND s.status = 'active'
+         ORDER BY s.created_at DESC LIMIT 1`,
+        [req.user.id]
+      ),
+    ]);
+
+    res.json({
+      user,
+      usage: {
+        sms_sent: smsRes.rows[0]?.sms_sent ?? 0,
+        call_minutes: 0,
+        active_numbers: numsRes.rows[0]?.active_numbers ?? 0,
+      },
+      plan: planRes.rows[0]?.name || null,
+    });
+  } catch (err) {
+    console.error('profile error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 export default router;
