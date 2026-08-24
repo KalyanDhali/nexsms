@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { uploadSmsImage } from '../../services/api.js';
 
+import ImageLightbox from './ImageLightbox.jsx';
+
 const MAX_RECIPIENTS = 5;
 
 export default function ConversationView({
@@ -25,6 +27,7 @@ export default function ConversationView({
   const [uploadError, setUploadError] = useState('');
   const [recipients, setRecipients] = useState([]);
   const [toFocused, setToFocused] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const composerRef = useRef(null);
@@ -273,7 +276,8 @@ export default function ConversationView({
                     <img
                       src={msg.mediaUrl}
                       alt=""
-                      className={`rounded-2xl max-w-[260px] max-h-64 object-cover shadow-sm ${msg.direction === 'out' ? '' : 'border border-slate-200'}`}
+                      onClick={() => setLightbox(msg.mediaUrl)}
+                      className={`rounded-2xl max-w-[260px] max-h-64 object-cover shadow-sm cursor-zoom-in transition hover:opacity-90 ${msg.direction === 'out' ? '' : 'border border-slate-200'}`}
                     />
                     {msg.body && (
                       <div className={`mt-1.5 ${msg.direction === 'out' ? 'text-right' : ''}`}>
@@ -325,6 +329,8 @@ export default function ConversationView({
           {composerBar(submitDraft, true)}
         </>
       )}
+
+      {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
