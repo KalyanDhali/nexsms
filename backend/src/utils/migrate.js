@@ -223,6 +223,20 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_limit_override INTEGER`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_override BOOLEAN`,
   `ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS reference TEXT`,
+  `CREATE TABLE IF NOT EXISTS ip_blocklist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip TEXT UNIQUE NOT NULL,
+    reason TEXT,
+    blocked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS user_ips (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ip TEXT NOT NULL,
+    seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, ip)
+  )`,
+  `ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS ip TEXT`,
   `CREATE TABLE IF NOT EXISTS referrals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     referrer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

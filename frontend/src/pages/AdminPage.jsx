@@ -8,6 +8,7 @@ import UsersSection from '../components/admin/UsersSection.jsx';
 import NumbersSection from '../components/admin/NumbersSection.jsx';
 import PlansSection from '../components/admin/PlansSection.jsx';
 import PaymentsSection from '../components/admin/PaymentsSection.jsx';
+import FraudSection from '../components/admin/FraudSection.jsx';
 import SettingsSection from '../components/admin/SettingsSection.jsx';
 
 const SECTIONS = [
@@ -17,6 +18,7 @@ const SECTIONS = [
   { key: 'numbers', icon: '📞' },
   { key: 'plans', icon: '📦' },
   { key: 'payments', icon: '💳' },
+  { key: 'fraud', icon: '🛡️' },
   { key: 'settings', icon: '⚙️' },
 ];
 
@@ -35,6 +37,7 @@ export default function AdminPage() {
     numbers: T('Numbers', '号码'),
     plans: T('Plans', '套餐'),
     payments: T('Payments', '支付'),
+    fraud: T('Fraud', '防欺诈'),
     settings: T('Settings', '设置'),
   };
 
@@ -45,6 +48,7 @@ export default function AdminPage() {
       case 'numbers': return <NumbersSection />;
       case 'plans': return <PlansSection />;
       case 'payments': return <PaymentsSection />;
+      case 'fraud': return <FraudSection />;
       case 'settings': return <SettingsSection />;
       default: return <OverviewSection />;
     }

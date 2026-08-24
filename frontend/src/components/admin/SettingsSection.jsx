@@ -14,6 +14,7 @@ export default function SettingsSection() {
   const [smsRate, setSmsRate] = useState('');
   const [payPerSmsDaily, setPayPerSmsDaily] = useState('');
   const [burstPerSec, setBurstPerSec] = useState('');
+  const [holdThreshold, setHoldThreshold] = useState(100);
   const [toast, setToast] = useState('');
   const [toastColor, setToastColor] = useState('');
   const { lang } = useLanguage();
@@ -33,6 +34,8 @@ export default function SettingsSection() {
         setSmsRate(s.settings.sms_rate?.rate ?? '');
         setPayPerSmsDaily(s.settings.pay_per_sms_limit?.daily ?? '');
         setBurstPerSec(s.settings.burst_limit?.perSecond ?? '');
+        const hold = tg.toggles.find((t) => t.key === 'payment_hold');
+        setHoldThreshold(hold?.config?.threshold ?? 100);
       } catch (e) { notify(e.response?.data?.error || 'Failed', 'red'); }
     })();
   }, []);
@@ -59,6 +62,12 @@ export default function SettingsSection() {
       updateSetting('burst_limit', { perSecond: Number(burstPerSec) }),
     ]);
     notify(T('Rate settings saved', '费率设置已保存'));
+  };
+
+  const saveHoldThreshold = async () => {
+    const hold = toggles.find((t) => t.key === 'payment_hold');
+    await updateAdminToggle('payment_hold', { enabled: hold?.enabled ?? true, config: { threshold: Number(holdThreshold) } });
+    notify(T('Fraud threshold saved', '防欺诈门槛已保存'));
   };
 
   const toggle = async (key, enabled) => {
@@ -132,9 +141,18 @@ export default function SettingsSection() {
         </div>
       </Card>
 
+      <Card className="mb-5">
+        <h3 className="font-semibold text-slate-900 mb-3">{T('Fraud thresholds', '防欺诈门槛')}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Field label={T('Hold score threshold (auto-HOLD)', '冻结分数门槛(自动HOLD)')}>
+            <TextInput type="number" value={holdThreshold} onChange={(e) => setHoldThreshold(e.target.value)} />
+          </Field>
+          <div className="flex items-end"><Button onClick={saveHoldThreshold}>{T('Save', '保存')}</Button></div>
+        </div>
+      </Card>
+
       <Card>
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Feature toggles', '功能开关')}</h3>
-        <div className="grid md:grid-cols-3 gap-6">
+        <h3 className="font-semibold text-slate-900 mb-3">{T('Feature toggles', '功能开关')}</h3>        <div className="grid md:grid-cols-3 gap-6">
           {groups.map((grp) => (
             <div key={grp}>
               <h4 className="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2">{groupLabels[grp] || grp}</h4>

@@ -3,8 +3,15 @@ import { query } from '../models/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { createPaymentOrder, confirmPaymentOrder, failPaymentOrder } from '../services/billingService.js';
 import { preparePayment } from '../services/paymentGatewayService.js';
+import { scoreDepositOrder, applyRiskToOrder } from '../services/riskService.js';
+import { isIpBlocked, recordLoginIp } from '../services/ipGuard.js';
 
 const router = Router();
+
+function clientIp(req) {
+  const raw = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+  return raw ? raw.replace(/^::ffff:/, '') : null;
+}
 
 // Public: active payment gateways (no credentials exposed)
 router.get('/gateways', async (req, res) => {
@@ -86,6 +93,14 @@ router.post('/deposit', authenticate, async (req, res) => {
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Valid amount required' });
   if (!gatewaySlug) return res.status(400).json({ error: 'gatewaySlug required' });
 
+  const ip = clientIp(req);
+
+  // IP blocklist guard
+  const blocked = await isIpBlocked(ip);
+  if (blocked?.blocked) {
+    return res.status(403).json({ error: `Access blocked${blocked.reason ? ': ' + blocked.reason : ''}`, blocked: true });
+  }
+
   const { rows: gw } = await query('SELECT * FROM payment_gateways WHERE slug = $1', [gatewaySlug]);
   if (!gw.length || !gw[0].active) return res.status(400).json({ error: 'Gateway unavailable' });
 
@@ -95,12 +110,25 @@ router.post('/deposit', authenticate, async (req, res) => {
       gatewayId: gw[0].id,
       amount: Number(amount),
       currency: currency || 'USD',
+      ip,
     });
+
+    // Multi-layer risk scoring -> may move order to 'hold'
+    const assessment = await scoreDepositOrder({
+      userId: req.user.id,
+      amount: Number(amount),
+      gatewayType: gw[0].type,
+      gatewaySlug,
+      ip,
+    });
+    const status = await applyRiskToOrder(order.id, assessment);
+
     const payment = await preparePayment(order, gateway);
     return res.status(201).json({
-      order: { id: order.id, amount: order.amount, currency: order.currency, status: order.status, expires_at: order.expires_at },
+      order: { id: order.id, amount: order.amount, currency: order.currency, status, expires_at: order.expires_at },
       gateway: { name: gateway.name, slug: gateway.slug, type: gateway.type, fee_percent: gateway.fee_percent },
       payment,
+      risk: { score: assessment.score, flags: assessment.flags, hold: status === 'hold' },
     });
   } catch (err) {
     if (err.code === 'NO_ADDRESS') return res.status(400).json({ error: err.message });
@@ -124,8 +152,8 @@ router.get('/deposits', authenticate, async (req, res) => {
 // Admin: manually confirm a payment order (credits balance / activates subscription)
 router.post('/deposit/:id/confirm', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { txid } = req.body || {};
-    const result = await confirmPaymentOrder(req.params.id, { txid });
+    const { txid, confirmations } = req.body || {};
+    const result = await confirmPaymentOrder(req.params.id, { txid, confirmations });
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -141,12 +169,12 @@ router.post('/deposit/:id/fail', authenticate, authorize('admin'), async (req, r
 // Simulated gateway webhook/callback — mirrors what a real gateway posts.
 // In production this would be per-gateway with signature validation.
 router.post('/webhook', async (req, res) => {
-  const { orderId, status, txid } = req.body;
+  const { orderId, status, txid, confirmations } = req.body;
   if (!orderId) return res.status(400).json({ error: 'orderId required' });
 
   try {
     if (status === 'completed' || status === 'paid' || status === 'success') {
-      const result = await confirmPaymentOrder(orderId, { txid });
+      const result = await confirmPaymentOrder(orderId, { txid, confirmations });
       return res.json(result);
     }
     if (status === 'failed' || status === 'cancelled' || status === 'expired') {

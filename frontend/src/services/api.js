@@ -80,3 +80,10 @@ export const getAdminPlans = () => api.get('/plans/all');
 export const createPlan = (payload) => api.post('/plans', payload);
 export const updatePlan = (id, payload) => api.put(`/plans/${id}`, payload);
 export const deletePlan = (id) => api.delete(`/plans/${id}`);
+
+export const getFraudOrders = (params) => api.get('/admin/fraud/orders', { params });
+export const approveFraudOrder = (id, payload) => api.post(`/admin/fraud/orders/${id}/approve`, payload);
+export const rejectFraudOrder = (id) => api.post(`/admin/fraud/orders/${id}/reject`);
+export const getBlocklist = () => api.get('/admin/fraud/blocklist');
+export const addBlocklist = (payload) => api.post('/admin/fraud/blocklist', payload);
+export const removeBlocklist = (ip) => api.delete(`/admin/fraud/blocklist/${ip}`);

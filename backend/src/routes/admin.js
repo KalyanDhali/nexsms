@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { query } from '../models/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { hashPassword } from '../utils/password.js';
+import { confirmPaymentOrder, failPaymentOrder } from '../services/billingService.js';
+import { blockIp, unblockIp, listBlocklist } from '../services/ipGuard.js';
 
 const router = Router();
 
@@ -138,6 +140,60 @@ router.get('/audit', async (req, res) => {
      ORDER BY a.created_at DESC LIMIT 100`
   );
   res.json({ audit: rows });
+});
+
+// --- Fraud prevention ---
+
+// Orders needing review (hold) + all orders with risk info
+router.get('/fraud/orders', async (req, res) => {
+  const { status } = req.query;
+  const cond = status ? 'WHERE o.status = $1' : '';
+  const params = status ? [status] : [];
+  const { rows } = await query(
+    `SELECT o.id, o.amount, o.currency, o.status, o.risk_score, o.risk_flags, o.txid, o.confirmations,
+            o.ip, o.created_at, u.email AS user_email, g.name AS gateway_name, g.type AS gateway_type
+     FROM payment_orders o
+     JOIN users u ON u.id = o.user_id
+     JOIN payment_gateways g ON g.id = o.gateway_id
+     ${cond} ORDER BY (o.status = 'hold') DESC, o.created_at DESC LIMIT 200`,
+    params
+  );
+  res.json({ orders: rows });
+});
+
+// Approve a held/risky order (confirm with optional confirmations)
+router.post('/fraud/orders/:id/approve', async (req, res) => {
+  try {
+    const { txid, confirmations } = req.body || {};
+    const result = await confirmPaymentOrder(req.params.id, { txid, confirmations });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Reject a held/risky order
+router.post('/fraud/orders/:id/reject', async (req, res) => {
+  await failPaymentOrder(req.params.id);
+  res.json({ ok: true });
+});
+
+// IP blocklist
+router.get('/fraud/blocklist', async (req, res) => {
+  const rows = await listBlocklist();
+  res.json({ blocklist: rows });
+});
+
+router.post('/fraud/blocklist', async (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  await blockIp(ip, reason || null, req.user.id);
+  res.json({ ok: true, ip });
+});
+
+router.delete('/fraud/blocklist/:ip', async (req, res) => {
+  await unblockIp(req.params.ip);
+  res.json({ ok: true });
 });
 
 export default router;

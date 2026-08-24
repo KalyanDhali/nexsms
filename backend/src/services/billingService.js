@@ -1,4 +1,5 @@
 import { query } from '../models/db.js';
+import { checkFlashUsdt } from './riskService.js';
 
 /**
  * Billing + payment order core logic.
@@ -86,7 +87,7 @@ export async function creditBalance(userId, amount, reference, type = 'deposit')
   return rows[0].balance;
 }
 
-export async function createPaymentOrder({ userId, gatewayId, amount, currency = 'USD', reference, referenceType = 'deposit' }) {
+export async function createPaymentOrder({ userId, gatewayId, amount, currency = 'USD', reference, referenceType = 'deposit', ip = null }) {
   const { rows: gw } = await query('SELECT * FROM payment_gateways WHERE id = $1', [gatewayId]);
   if (!gw.length) throw Object.assign(new Error('Gateway not found'), { code: 'GATEWAY_NOT_FOUND' });
   const gateway = gw[0];
@@ -100,16 +101,16 @@ export async function createPaymentOrder({ userId, gatewayId, amount, currency =
 
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const { rows } = await query(
-    `INSERT INTO payment_orders (user_id, gateway_id, amount, currency, status, reference, expires_at)
-     VALUES ($1, $2, $3, $4, 'pending', $5, $6) RETURNING *`,
-    [userId, gatewayId, amount, currency, reference, expiresAt]
+    `INSERT INTO payment_orders (user_id, gateway_id, amount, currency, status, reference, expires_at, ip)
+     VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7) RETURNING *`,
+    [userId, gatewayId, amount, currency, reference, expiresAt, ip]
   );
   return { order: rows[0], gateway };
 }
 
-export async function confirmPaymentOrder(orderId, { txid = null } = {}) {
+export async function confirmPaymentOrder(orderId, { txid = null, confirmations = null } = {}) {
   const { rows: orders } = await query(
-    `SELECT o.*, g.slug AS gateway_slug FROM payment_orders o
+    `SELECT o.*, g.slug AS gateway_slug, g.type AS gateway_type, g.min_confirmations FROM payment_orders o
      JOIN payment_gateways g ON g.id = o.gateway_id
      WHERE o.id = $1`,
     [orderId]
@@ -118,9 +119,18 @@ export async function confirmPaymentOrder(orderId, { txid = null } = {}) {
   const order = orders[0];
   if (order.status === 'completed') return { order, already: true };
 
+  // Flash-USDT guard: wallet deposits below the required confirmations
+  // produce a warning so admins can spot instantly-reversed deposits.
+  const flash = await checkFlashUsdt(orderId);
+
   await query(
-    `UPDATE payment_orders SET status = 'completed', txid = COALESCE($2, txid), confirmations = COALESCE(confirmations, 1), updated_at = NOW() WHERE id = $1`,
-    [orderId, txid]
+    `UPDATE payment_orders SET
+       status = 'completed',
+       txid = COALESCE($2, txid),
+       confirmations = COALESCE($3, confirmations),
+       updated_at = NOW()
+     WHERE id = $1`,
+    [orderId, txid, confirmations]
   );
 
   // Apply side-effect based on reference type
@@ -132,7 +142,7 @@ export async function confirmPaymentOrder(orderId, { txid = null } = {}) {
     const balance = await creditBalance(order.user_id, Number(order.amount), orderId, 'deposit');
     outcome = { balance, credited: Number(order.amount) };
   }
-  return { order: { ...order, status: 'completed' }, outcome };
+  return { order: { ...order, status: 'completed' }, outcome, warning: flash.warning || null };
 }
 
 export async function failPaymentOrder(orderId) {

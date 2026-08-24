@@ -3,14 +3,24 @@ import { query } from '../models/db.js';
 import { hashPassword, comparePassword } from '../utils/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { authenticate } from '../middleware/auth.js';
+import { isIpBlocked, recordLoginIp } from '../services/ipGuard.js';
 
 const router = Router();
+
+function clientIp(req) {
+  const raw = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+  return raw ? raw.replace(/^::ffff:/, '') : null;
+}
 
 router.post('/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const blocked = await isIpBlocked(clientIp(req));
+    if (blocked?.blocked) {
+      return res.status(403).json({ error: 'Registration blocked from this network' });
     }
     const hashed = await hashPassword(password);
     const { rows } = await query(
@@ -40,6 +50,10 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    const blocked = await isIpBlocked(clientIp(req));
+    if (blocked?.blocked) {
+      return res.status(403).json({ error: `Access blocked${blocked.reason ? ': ' + blocked.reason : ''}` });
+    }
     const { rows } = await query('SELECT * FROM users WHERE email = $1', [email?.toLowerCase()]);
     if (!rows.length) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -54,10 +68,12 @@ router.post('/login', async (req, res) => {
     }
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
+    const ip = clientIp(req);
     await query(
-      'INSERT INTO sessions (user_id, refresh_token, expires_at) VALUES ($1, $2, NOW() + interval \'30 days\')',
-      [user.id, refreshToken]
+      'INSERT INTO sessions (user_id, refresh_token, ip, expires_at) VALUES ($1, $2, $3, NOW() + interval \'30 days\')',
+      [user.id, refreshToken, ip]
     );
+    await recordLoginIp(user.id, ip);
     res.json({
       user: { id: user.id, email: user.email, name: user.name, role: user.role, balance: user.balance, billing_mode: user.billing_mode },
       accessToken,
