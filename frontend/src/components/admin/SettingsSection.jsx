@@ -15,6 +15,7 @@ export default function SettingsSection() {
   const [payPerSmsDaily, setPayPerSmsDaily] = useState('');
   const [burstPerSec, setBurstPerSec] = useState('');
   const [holdThreshold, setHoldThreshold] = useState(100);
+  const [currency, setCurrency] = useState({ base: 'USD', rates: {} });
   const [toast, setToast] = useState('');
   const [toastColor, setToastColor] = useState('');
   const { lang } = useLanguage();
@@ -36,6 +37,7 @@ export default function SettingsSection() {
         setBurstPerSec(s.settings.burst_limit?.perSecond ?? '');
         const hold = tg.toggles.find((t) => t.key === 'payment_hold');
         setHoldThreshold(hold?.config?.threshold ?? 100);
+        setCurrency(s.settings.currency || { base: 'USD', rates: {} });
       } catch (e) { notify(e.response?.data?.error || 'Failed', 'red'); }
     })();
   }, []);
@@ -68,6 +70,11 @@ export default function SettingsSection() {
     const hold = toggles.find((t) => t.key === 'payment_hold');
     await updateAdminToggle('payment_hold', { enabled: hold?.enabled ?? true, config: { threshold: Number(holdThreshold) } });
     notify(T('Fraud threshold saved', '防欺诈门槛已保存'));
+  };
+
+  const saveCurrency = async () => {
+    await updateSetting('currency', currency);
+    notify(T('Currency rates saved', '汇率已保存'));
   };
 
   const toggle = async (key, enabled) => {
@@ -139,6 +146,25 @@ export default function SettingsSection() {
           <Field label={T('Burst per second', '每秒爆发限制')}><TextInput type="number" value={burstPerSec} onChange={(e) => setBurstPerSec(e.target.value)} /></Field>
           <div className="flex items-end"><Button onClick={saveRates}>{T('Save', '保存')}</Button></div>
         </div>
+      </Card>
+
+      <Card className="mb-5">
+        <h3 className="font-semibold text-slate-900 mb-3">{T('Currency rates', '汇率')}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+          <Field label={T('Base currency', '基础货币')}>
+            <TextInput value={currency.base || 'USD'} onChange={(e) => setCurrency({ ...currency, base: e.target.value.toUpperCase() })} />
+          </Field>
+          {['USDT', 'BTC', 'BEP20'].map((c) => (
+            <Field key={c} label={c}>
+              <TextInput type="number" step="0.0000001" value={currency.rates?.[c] ?? ''}
+                onChange={(e) => setCurrency({ ...currency, rates: { ...currency.rates, [c]: Number(e.target.value) } })} />
+            </Field>
+          ))}
+          <div className="flex items-end"><Button onClick={saveCurrency}>{T('Save', '保存')}</Button></div>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          {T('1 base = N alt (e.g. USDT 1, BTC 0.000015). QR/instructions convert automatically.', '1 基础货币 = N 其他币种（如 USDT 1，BTC 0.000015）。二维码与付款说明将自动换算。')}
+        </p>
       </Card>
 
       <Card className="mb-5">

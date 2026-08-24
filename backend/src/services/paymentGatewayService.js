@@ -58,19 +58,48 @@ async function buildQr(gateway, address, amount) {
 }
 
 /**
+ * Order amounts are always stored in the base currency (USD) for
+ * accounting. The order's `currency` field is the *payment* currency:
+ * when it differs from base, we convert the display amount (QR code and
+ * instructions) using admin-editable rates from settings.currency.
+ */
+async function convertToPaymentCurrency(order, gateway) {
+  const asset = gateway.credentials?.asset || (gateway.type === 'wallet' ? 'USDT' : order.currency);
+  const currency = order.currency === 'USD' ? asset : order.currency;
+
+  let rate = 1;
+  if (currency !== 'USD') {
+    try {
+      const { query } = await import('../models/db.js');
+      const { rows } = await query(`SELECT value FROM settings WHERE key = 'currency'`);
+      const cfg = rows[0]?.value || { base: 'USD', rates: {} };
+      rate = Number(cfg.rates?.[currency] || 1);
+    } catch (err) {
+      console.error('[payments] currency lookup failed:', err.message);
+    }
+  }
+  const amount = Math.round(Number(order.amount) * rate * 1e8) / 1e8;
+  return { amount, currency, rate };
+}
+
+/**
  * Prepare payment instructions for a pending order.
  * Returns { address?, qr_code?, payment_url?, instructions } — enough for
  * the frontend to render a payment screen.
  */
 export async function preparePayment(order, gateway) {
+  const pay = await convertToPaymentCurrency(order, gateway);
+
   if (gateway.type === 'wallet') {
     const address = await resolveWalletAddress(gateway);
-    const qrCode = await buildQr(gateway, address, order.amount);
+    const qrCode = await buildQr(gateway, address, pay.amount);
     return {
       method: 'wallet',
       address,
       qr_code: qrCode,
-      instructions: `Send exactly ${order.amount} ${order.currency === 'USD' ? (gateway.credentials?.asset || order.currency) : order.currency} to the address.`,
+      currency: pay.currency,
+      rate: pay.rate,
+      instructions: `Send exactly ${pay.amount} ${pay.currency} to the address.`,
       confirmations: gateway.min_confirmations,
     };
   }
@@ -84,6 +113,8 @@ export async function preparePayment(order, gateway) {
   return {
     method: 'api',
     payment_url: paymentUrl,
+    currency: pay.currency,
+    rate: pay.rate,
     instructions: 'Complete payment on the gateway checkout page.',
   };
 }

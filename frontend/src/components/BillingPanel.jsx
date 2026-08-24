@@ -30,6 +30,7 @@ export default function BillingPanel() {
   // Deposit flow
   const [depositAmount, setDepositAmount] = useState(50);
   const [depositGateway, setDepositGateway] = useState('');
+  const [depositCurrency, setDepositCurrency] = useState('USD');
   const [order, setOrder] = useState(null); // active payment screen
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function BillingPanel() {
       return notify(T('Enter amount and select gateway', '请输入金额并选择网关'), 'red');
     }
     try {
-      const { data } = await createDeposit({ amount: Number(depositAmount), gatewaySlug: depositGateway });
+      const { data } = await createDeposit({ amount: Number(depositAmount), gatewaySlug: depositGateway, currency: depositCurrency });
       setOrder({ ...data.order, gateway: data.gateway, payment: data.payment, reason: T('Wallet deposit', '钱包充值') });
     } catch (e) {
       notify(e.response?.data?.error || 'Failed', 'red');
@@ -281,6 +282,12 @@ export default function BillingPanel() {
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">{T('Amount (USD)', '金额(美元)')}</label>
                   <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-36" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">{T('Pay with', '支付币种')}</label>
+                  <select value={depositCurrency} onChange={(e) => setDepositCurrency(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                    {['USD', 'USDT', 'BTC'].map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">{T('Gateway', '网关')}</label>
