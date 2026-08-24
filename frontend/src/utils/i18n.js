@@ -7,6 +7,7 @@ export const translations = {
     nav: {
       features: 'Features',
       pricing: 'Pricing',
+      security: 'Security',
       login: 'Sign in',
       getStarted: 'Get started',
       dashboard: 'Dashboard',
@@ -45,6 +46,7 @@ export const translations = {
     nav: {
       features: '功能',
       pricing: '价格',
+      security: '安全',
       login: '登录',
       getStarted: '开始使用',
       dashboard: '控制台',

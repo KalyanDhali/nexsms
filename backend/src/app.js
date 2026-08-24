@@ -47,6 +47,28 @@ app.use('/api/keys', apiKeyRoutes);
 app.use('/api/v1', apiV1Routes);
 app.use('/api/kyc', kycRoutes);
 
+// Public landing-page stats
+app.get('/api/public/stats', async (req, res) => {
+  try {
+    const { query } = await import('./models/db.js');
+    const [avail, providers, sent, users] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS c FROM numbers WHERE status = 'available'`),
+      query(`SELECT COUNT(*)::int AS c FROM providers WHERE active = TRUE`),
+      query(`SELECT COUNT(*)::int AS c FROM messages WHERE status IN ('sent','delivered')`),
+      query(`SELECT COUNT(*)::int AS c FROM users WHERE role = 'user'`),
+    ]);
+    res.json({
+      availableNumbers: avail.rows[0].c,
+      activeProviders: providers.rows[0].c,
+      messagesSent: sent.rows[0].c,
+      users: users.rows[0].c,
+    });
+  } catch (err) {
+    console.error('public stats error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Public settings (theme, site name) for the frontend
 app.get('/api/settings/public', async (req, res) => {
   try {
