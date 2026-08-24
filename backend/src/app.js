@@ -3,11 +3,15 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/index.js';
 import authRoutes from './routes/auth.js';
+import providerRoutes from './routes/providers.js';
+import webhookRoutes from './routes/webhooks.js';
+import messageRoutes from './routes/messages.js';
 
 const app = express();
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -22,6 +26,25 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/providers', providerRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/webhooks', webhookRoutes);
+
+// Public settings (theme, site name) for the frontend
+app.get('/api/settings/public', async (req, res) => {
+  try {
+    const { query } = await import('./models/db.js');
+    const { rows } = await query(`SELECT key, value FROM settings WHERE key IN ('theme','site_name')`);
+    const out = {};
+    for (const r of rows) {
+      if (r.key === 'theme') out.theme = r.value;
+      if (r.key === 'site_name') out.siteName = r.value?.value || 'NexSMS';
+    }
+    res.json(out);
+  } catch {
+    res.json({});
+  }
+});
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

@@ -30,6 +30,8 @@ async function seed() {
     ['theme', JSON.stringify({ primaryColor: '#4F46E5', secondaryColor: '#7C3AED', font: 'Inter', logo: '' })],
     ['billing', JSON.stringify({ prepaid: true, subscription: true, hybrid: false, quotaExhausted: 'block' })],
     ['currency', JSON.stringify({ base: 'USD', rates: { USDT: 1, BTC: 0.000015 } })],
+    ['sms_rate', JSON.stringify({ rate: 0.0079 })],
+    ['pay_per_sms_limit', JSON.stringify({ daily: 50 })],
   ];
 
   for (const [key, value] of settings) {
