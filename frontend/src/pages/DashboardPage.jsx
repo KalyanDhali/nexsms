@@ -229,6 +229,8 @@ export default function DashboardPage() {
         open={keypadOpen}
         onToggle={() => setKeypadOpen((v) => !v)}
         fromNumber={fromNumber}
+        numbers={numbers}
+        onFromNumberChange={setFromNumber}
         input={dialInput}
         onInputChange={setDialInput}
         onKey={onKey}
