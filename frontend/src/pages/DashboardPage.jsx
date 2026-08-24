@@ -91,7 +91,10 @@ export default function DashboardPage() {
     getMyNumbers()
       .then(({ data }) => {
         setNumbers(data.numbers);
-        if (data.numbers.length) setFromNumber(data.numbers[0].number);
+        const firstAssigned = [...data.numbers].sort(
+          (a, b) => new Date(a.created_at) - new Date(b.created_at)
+        )[0];
+        if (firstAssigned) setFromNumber(firstAssigned.number);
       })
       .catch(() => {});
   }, []);

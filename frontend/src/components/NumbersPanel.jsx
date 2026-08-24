@@ -26,7 +26,10 @@ export default function NumbersPanel() {
   const loadNumbers = async () => {
     try {
       const { data } = await getMyNumbers();
-      setNumbers(data.numbers);
+      const sorted = [...data.numbers].sort(
+        (a, b) => new Date(a.created_at) - new Date(b.created_at)
+      );
+      setNumbers(sorted);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to load numbers');
     } finally {
