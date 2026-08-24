@@ -43,20 +43,8 @@ export default function ConversationView({
     return () => document.removeEventListener('mousedown', handler);
   }, [composing, onCloseComposer]);
 
-  const contactOptions = dialInput.trim()
-    ? contacts.filter(
-        (th) =>
-          th.name.toLowerCase().includes(dialInput.toLowerCase()) ||
-          th.preview.toLowerCase().includes(dialInput.toLowerCase())
-      )
-    : contacts;
   const digits = (s) => (s || '').replace(/[^0-9]/g, '');
-  const fullNumber = /^[0-9+()\s-]{7,}$/.test(dialInput.trim()) && !contactOptions.some((th) => digits(th.name) === digits(dialInput));
-  const avatarColor = (i) => ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500', 'bg-cyan-600'][i % 6];
-  const contactInitials = (name) => {
-    const d = (name.match(/\d/g) || []).slice(-4).join('');
-    return d || name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '?';
-  };
+  const fullNumber = /^[0-9+()\s-]{7,}$/.test(dialInput.trim()) && !contacts.some((th) => digits(th.name) === digits(dialInput));
 
   useEffect(() => {
     getTemplates().then(({ data }) => setTemplates(data.templates)).catch(() => {});
@@ -118,23 +106,6 @@ export default function ConversationView({
             <div className="mt-1.5 text-xs text-slate-400">{t('chat.addRecipients')}</div>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
-            {contactOptions.map((th, i) => (
-              <button
-                key={th.id}
-                onClick={() => onPickContact(th.name)}
-                className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-100 transition text-left"
-              >
-                <span className={`w-9 h-9 shrink-0 rounded-full ${avatarColor(i)} text-white text-[11px] font-semibold flex items-center justify-center`}>
-                  {contactInitials(th.name)}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-slate-800 truncate">{th.name}</span>
-                  <span className="block text-xs text-slate-400 truncate">
-                    {th.lastDirection === 'out' ? `You: ${th.preview}` : th.preview}
-                  </span>
-                </span>
-              </button>
-            ))}
             {fullNumber && (
               <button
                 onClick={() => onPickContact(dialInput.trim())}
@@ -146,7 +117,7 @@ export default function ConversationView({
                 </span>
               </button>
             )}
-            {contactOptions.length === 0 && !fullNumber && (
+            {!fullNumber && (
               <div className="text-center text-sm text-slate-400 py-10">{t('chat.noContacts')}</div>
             )}
           </div>
