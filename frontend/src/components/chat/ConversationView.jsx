@@ -81,7 +81,7 @@ export default function ConversationView({
 
   const submitDraft = (e) => {
     e.preventDefault();
-    if (draft.trim()) {
+    if (draft.trim() || mediaUrl.trim()) {
       onSend(draft, mediaUrl.trim() || null);
       setDraft('');
       setMediaUrl('');
@@ -90,7 +90,7 @@ export default function ConversationView({
 
   const submitCompose = (e) => {
     e.preventDefault();
-    if (recipients.length && draft.trim()) {
+    if (recipients.length && (draft.trim() || mediaUrl.trim())) {
       onComposeSend({ recipients, body: draft.trim(), mediaUrl: mediaUrl.trim() || null });
       setDraft('');
       setMediaUrl('');
@@ -173,9 +173,9 @@ export default function ConversationView({
 
         <button
           type="submit"
-          disabled={!canSend || !draft.trim()}
+          disabled={!canSend || (!draft.trim() && !mediaUrl)}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
-            canSend && draft.trim() ? 'bg-[#1a73e8] text-white hover:bg-[#1765cc]' : 'bg-gray-100 text-gray-400'
+            canSend && (draft.trim() || mediaUrl) ? 'bg-[#1a73e8] text-white hover:bg-[#1765cc]' : 'bg-gray-100 text-gray-400'
           }`}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
