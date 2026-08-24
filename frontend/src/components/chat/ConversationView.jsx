@@ -223,7 +223,7 @@ export default function ConversationView({
                   value={dialInput}
                   onChange={(e) => onDialChange(e.target.value)}
                   placeholder={T('Type a name or phone number', '输入姓名或电话号码')}
-                  className="flex-1 min-w-[160px] px-3 py-2 rounded-xl border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm outline-none transition"
+                  className="flex-1 min-w-[160px] py-2 text-sm outline-none"
                 />
               )}
             </div>
