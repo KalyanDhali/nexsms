@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
-import { getMyNumbers, setPrimaryNumber, getAvailableNumbers } from '../services/api.js';
+import { getMyNumbers, setPrimaryNumber, getAvailableNumbers, selfAssignNumber } from '../services/api.js';
 
 export default function NumbersPanel() {
   const { user } = useAuth();
@@ -48,9 +48,19 @@ export default function NumbersPanel() {
       await setPrimaryNumber(id);
       setToast(isZh ? '已设置为主号' : 'Set as primary');
       loadNumbers();
-      setTimeout(() => setToast(''), 2500);
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed');
+      setToast(e.response?.data?.error || 'Failed');
+    }
+  };
+
+  const handleSelfAssign = async (id) => {
+    try {
+      await selfAssignNumber(id);
+      setToast(isZh ? '号码已分配给你' : 'Number assigned to you');
+      loadNumbers();
+      loadAvailable();
+    } catch (e) {
+      setToast(e.response?.data?.error || 'Failed');
     }
   };
 
@@ -137,6 +147,7 @@ export default function NumbersPanel() {
                         {num.geo_area_code ? `Area ${num.geo_area_code} · ` : ''}
                         {num.provider_name || (isZh ? '本地' : 'Direct')}
                         {num.compliance_status === 'not_registered' ? ` · ${isZh ? '未注册' : 'Not registered'}` : ''}
+                        {num.expires_at ? ` · ${isZh ? '到期 ' : 'Expires '}${new Date(num.expires_at).toLocaleDateString()}` : ''}
                       </div>
                     </div>
                   </div>
@@ -199,7 +210,7 @@ export default function NumbersPanel() {
                     <button
                       className="px-4 py-1.5 rounded-lg text-white text-sm font-medium"
                       style={{ background: theme.primary }}
-                      onClick={() => setToast(isZh ? '请联系管理员完成分配' : 'Contact admin to assign')}
+                      onClick={() => handleSelfAssign(num.id)}
                     >
                       {isZh ? '选择' : 'Select'}
                     </button>

@@ -5,6 +5,7 @@ import { createPaymentOrder, confirmPaymentOrder, failPaymentOrder } from '../se
 import { preparePayment } from '../services/paymentGatewayService.js';
 import { scoreDepositOrder, applyRiskToOrder } from '../services/riskService.js';
 import { isIpBlocked, recordLoginIp } from '../services/ipGuard.js';
+import { requireKyc } from '../services/kycService.js';
 
 const router = Router();
 
@@ -94,6 +95,10 @@ router.post('/deposit', authenticate, async (req, res) => {
   if (!gatewaySlug) return res.status(400).json({ error: 'gatewaySlug required' });
 
   const ip = clientIp(req);
+
+  // KYC gate (if enabled by admin)
+  const kyc = await requireKyc(req.user.id);
+  if (kyc.error) return res.status(403).json({ error: kyc.error.message, code: kyc.error.code, kyc_status: kyc.error.kyc_status });
 
   // IP blocklist guard
   const blocked = await isIpBlocked(ip);

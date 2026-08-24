@@ -4,6 +4,7 @@ import { hashPassword, comparePassword } from '../utils/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { authenticate } from '../middleware/auth.js';
 import { isIpBlocked, recordLoginIp } from '../services/ipGuard.js';
+import { applyReferralCode } from '../services/referralService.js';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ function clientIp(req) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, referralCode } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -34,6 +35,7 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
     const user = rows[0];
+    if (referralCode) await applyReferralCode(user.id, referralCode);
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     await query(

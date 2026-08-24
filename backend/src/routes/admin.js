@@ -196,4 +196,39 @@ router.delete('/fraud/blocklist/:ip', async (req, res) => {
   res.json({ ok: true });
 });
 
+// KYC review queue
+router.get('/kyc', async (req, res) => {
+  const { status = 'pending' } = req.query;
+  const { rows } = await query(
+    `SELECT k.*, u.email, u.name AS user_name, u.kyc_status
+     FROM kyc_submissions k JOIN users u ON u.id = k.user_id
+     WHERE k.status = $1 ORDER BY k.submitted_at DESC`,
+    [status]
+  );
+  res.json({ submissions: rows });
+});
+
+router.post('/kyc/:id/approve', async (req, res) => {
+  const { rows } = await query(
+    `UPDATE kyc_submissions SET status = 'approved', reviewed_at = NOW(), reviewed_by = $2
+     WHERE id = $1 AND status = 'pending' RETURNING id, user_id`,
+    [req.params.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Submission not found or already reviewed' });
+  await query(`UPDATE users SET kyc_status = 'verified', updated_at = NOW() WHERE id = $1`, [rows[0].user_id]);
+  res.json({ ok: true });
+});
+
+router.post('/kyc/:id/reject', async (req, res) => {
+  const { note } = req.body;
+  const { rows } = await query(
+    `UPDATE kyc_submissions SET status = 'rejected', note = $3, reviewed_at = NOW(), reviewed_by = $2
+     WHERE id = $1 AND status = 'pending' RETURNING id, user_id`,
+    [req.params.id, req.user.id, note || null]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Submission not found or already reviewed' });
+  await query(`UPDATE users SET kyc_status = 'rejected', updated_at = NOW() WHERE id = $1`, [rows[0].user_id]);
+  res.json({ ok: true });
+});
+
 export default router;

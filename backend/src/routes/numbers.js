@@ -7,6 +7,14 @@ const router = Router();
 
 router.use(authenticate);
 
+// Expiry date for newly assigned numbers, based on the number_expiry toggle.
+async function getNumberExpiryDate() {
+  const { rows } = await query(`SELECT enabled, config FROM feature_toggles WHERE key = 'number_expiry'`);
+  if (!rows.length || !rows[0].enabled) return null;
+  const days = Number(rows[0].config?.leaseDays || rows[0].config?.graceDays || 30);
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 /**
  * Admin routes — number pool management
  */
@@ -114,11 +122,13 @@ router.post('/:id/assign', authorize('admin'), async (req, res) => {
     [userId]
   );
   const isPrimary = existing.length === 0;
+  const expiresAt = await getNumberExpiryDate();
 
   const { rows } = await query(
-    `UPDATE numbers SET assigned_user_id = $2, status = 'assigned', primary_number = $3, updated_at = NOW()
+    `UPDATE numbers SET assigned_user_id = $2, status = 'assigned', primary_number = $3,
+            expires_at = COALESCE($4, expires_at), updated_at = NOW()
      WHERE id = $1 RETURNING *`,
-    [req.params.id, userId, isPrimary]
+    [req.params.id, userId, isPrimary, expiresAt]
   );
   res.json({ number: rows[0] });
 });
@@ -218,6 +228,32 @@ router.get('/available', async (req, res) => {
     params
   );
   res.json({ numbers: rows });
+});
+
+// Self-assign an available number to the requesting user
+router.post('/available/:id/assign', async (req, res) => {
+  const { rows: toggle } = await query(`SELECT enabled FROM feature_toggles WHERE key = 'self_assign'`);
+  const allowed = toggle.length ? toggle[0].enabled : false;
+  if (!allowed) return res.status(403).json({ error: 'Self-assignment disabled by admin' });
+
+  const { rows: numberRows } = await query('SELECT * FROM numbers WHERE id = $1', [req.params.id]);
+  if (!numberRows.length) return res.status(404).json({ error: 'Number not found' });
+  if (numberRows[0].assigned_user_id) return res.status(400).json({ error: 'Number is already assigned' });
+
+  const { rows: existing } = await query(
+    'SELECT id FROM numbers WHERE assigned_user_id = $1 AND status = $2',
+    [req.user.id, 'assigned']
+  );
+  const isPrimary = existing.length === 0;
+  const expiresAt = await getNumberExpiryDate();
+
+  const { rows } = await query(
+    `UPDATE numbers SET assigned_user_id = $2, status = 'assigned', primary_number = $3,
+            expires_at = COALESCE($4, expires_at), updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [req.params.id, req.user.id, isPrimary, expiresAt]
+  );
+  res.json({ number: rows[0] });
 });
 
 export default router;

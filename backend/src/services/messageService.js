@@ -1,5 +1,6 @@
 import { query } from '../models/db.js';
 import { sendSmsWithFailover } from './providerService.js';
+import { requireKyc } from './kycService.js';
 
 /**
  * Shared messaging core — used by the send route and the scheduler
@@ -98,6 +99,10 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
   if (number.status !== 'assigned' || number.assigned_user_id !== userId) {
     throw new Error('Number is not assigned to you');
   }
+
+  // KYC gate (when enabled by admin)
+  const kyc = await requireKyc(userId);
+  if (kyc.error) throw kyc.error;
 
   const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [userId]);
   const user = userRows[0];

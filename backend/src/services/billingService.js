@@ -1,5 +1,6 @@
 import { query } from '../models/db.js';
 import { checkFlashUsdt } from './riskService.js';
+import { grantReferralBonus } from './referralService.js';
 
 /**
  * Billing + payment order core logic.
@@ -141,6 +142,9 @@ export async function confirmPaymentOrder(orderId, { txid = null, confirmations 
   } else {
     const balance = await creditBalance(order.user_id, Number(order.amount), orderId, 'deposit');
     outcome = { balance, credited: Number(order.amount) };
+    // One-time referral bonus for the referrer on the referred user's first deposit
+    const bonus = await grantReferralBonus(order.user_id, Number(order.amount));
+    if (bonus) outcome.referralBonus = bonus;
   }
   return { order: { ...order, status: 'completed' }, outcome, warning: flash.warning || null };
 }

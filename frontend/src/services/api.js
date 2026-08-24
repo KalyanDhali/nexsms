@@ -73,10 +73,18 @@ export const providerHealthCheck = (id) => api.post(`/providers/${id}/health`);
 export const getApiKeys = () => api.get('/keys');
 export const createApiKey = (payload) => api.post('/keys', payload);
 export const revokeApiKey = (id) => api.post(`/keys/${id}/revoke`);
+
+export const getKyc = () => api.get('/kyc');
+export const submitKyc = (payload) => api.post('/kyc', payload);
+export const getReferral = () => api.get('/kyc/referral');
+export const adminGetKyc = (params) => api.get('/admin/kyc', { params });
+export const adminApproveKyc = (id) => api.post(`/admin/kyc/${id}/approve`);
+export const adminRejectKyc = (id, payload) => api.post(`/admin/kyc/${id}/reject`, payload);
 export const providerTestConnection = (payload) => api.post('/providers/test-connection', payload);
 export const getPoolNumbers = (params) => api.get('/numbers/pool', { params });
 export const createNumber = (payload) => api.post('/numbers', payload);
 export const assignNumber = (id, payload) => api.post(`/numbers/${id}/assign`, payload);
+export const selfAssignNumber = (id) => api.post(`/numbers/available/${id}/assign`);
 export const revokeNumber = (id) => api.post(`/numbers/${id}/revoke`);
 export const blockNumber = (id, blocked) => api.patch(`/numbers/${id}/block`, { blocked });
 export const getPoolStats = () => api.get('/numbers/pool/stats');

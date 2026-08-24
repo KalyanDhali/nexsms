@@ -97,6 +97,7 @@ router.post('/sms/send', async (req, res) => {
     }
     if (err.code === 'INSUFFICIENT_BALANCE') return res.status(402).json({ error: err.message, cost: err.cost });
     if (err.code === 'QUOTA_EXHAUSTED' || err.code === 'NO_SUBSCRIPTION') return res.status(402).json({ error: err.message });
+    if (err.code === 'KYC_REQUIRED') return res.status(403).json({ error: err.message, code: err.code });
 
     if (conversationId && body) {
       await query(
