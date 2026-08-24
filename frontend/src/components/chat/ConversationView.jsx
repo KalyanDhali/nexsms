@@ -284,6 +284,8 @@ export default function ConversationView({
               : t('chat.addRecipients')}
           </div>
 
+          <div className="flex-1 w-full overflow-y-auto" />
+
           {recipients.length > 0 && composerBar(submitCompose, true)}
         </div>
       ) : !thread ? (
