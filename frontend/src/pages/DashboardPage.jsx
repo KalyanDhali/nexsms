@@ -13,25 +13,24 @@ import BlastModal from '../components/BlastModal.jsx';
 const mockThreads = [
   {
     id: 1,
-    name: '+1 (650) 769-0192',
-    preview: 'Good day! Confirming your order...',
-    time: '10:16 PM',
-    unread: 1,
-    active: true,
+    name: '(920) 917-4460',
+    preview: 'Hello Kenji! I am Victoria, the lead at Vanker Finance. Our team no...',
+    time: 'Sun',
+    unread: 0,
+    lastDirection: 'out',
     messages: [
-      { id: 1, direction: 'out', body: 'Hello! Your order is confirmed. Thank you!', time: '10:04 PM', status: 'delivered' },
-      { id: 2, direction: 'in', body: 'Great, when will it arrive?', time: '10:10 PM' },
-      { id: 3, direction: 'out', body: 'By Friday. Tracking: NX-4821', time: '10:15 PM', status: 'delivered' },
+      { id: 1, direction: 'out', body: 'Hello Kenji! I am Victoria, the lead at Vanker Finance. Our team no...', time: 'Sun', status: 'delivered' },
     ],
   },
   {
     id: 2,
-    name: 'Elizabeth Chen',
-    preview: 'The package arrived, thank you!',
-    time: '9:42 PM',
+    name: '(920) 246-7591',
+    preview: "Good morning, David! I'm Victoria, the lead at Vanker Finance. Ou...",
+    time: '9:32 PM',
     unread: 0,
+    lastDirection: 'out',
     messages: [
-      { id: 1, direction: 'in', body: 'The package arrived, thank you! Everything looks great.', time: '9:42 PM' },
+      { id: 1, direction: 'out', body: "Good morning, David! I'm Victoria, the lead at Vanker Finance. Ou...", time: '9:32 PM', status: 'delivered' },
     ],
   },
   {
@@ -39,10 +38,23 @@ const mockThreads = [
     name: '+1 (213) 461-4228',
     preview: 'Hi Kayla! Are you available?',
     time: '8:30 PM',
-    unread: 0,
+    unread: 2,
+    lastDirection: 'in',
     messages: [
       { id: 1, direction: 'in', body: 'Hi Kayla! Are you available?', time: '8:30 PM' },
       { id: 2, direction: 'out', body: 'Yes, I am! What do you need?', time: '8:32 PM', status: 'sent' },
+    ],
+  },
+  {
+    id: 4,
+    name: '(920) 246-7592',
+    preview: 'Great, talk soon!',
+    time: '6:05 PM',
+    unread: 0,
+    lastDirection: 'out',
+    messages: [
+      { id: 1, direction: 'in', body: 'Can you send the details?', time: '6:00 PM' },
+      { id: 2, direction: 'out', body: 'Great, talk soon!', time: '6:05 PM', status: 'sent' },
     ],
   },
 ];
@@ -68,6 +80,7 @@ export default function DashboardPage() {
               ...th,
               messages: [...th.messages, { id: Date.now(), direction: 'out', body, mediaUrl, time: 'Now', status: 'sent' }],
               preview: body,
+              lastDirection: 'out',
             }
           : th
       )
@@ -157,6 +170,7 @@ export default function DashboardPage() {
                 preview: 'No messages yet',
                 time: 'Now',
                 unread: 0,
+                lastDirection: 'in',
                 messages: [],
               };
               setThreads((prev) => [newThread, ...prev]);

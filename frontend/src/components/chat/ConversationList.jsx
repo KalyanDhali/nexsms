@@ -31,16 +31,18 @@ export default function ConversationList({ threads, activeId, onSelect, search, 
             }`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-sm text-slate-900 truncate">{thread.name}</span>
+              <span className="font-medium text-sm text-slate-900 truncate">{thread.name}</span>
               {thread.unread > 0 && (
                 <span className="shrink-0 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
                   {thread.unread}
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <span className="text-xs text-slate-500 truncate">{thread.preview}</span>
-              <span className="shrink-0 text-[10px] text-slate-400">{thread.time}</span>
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <span className="text-xs text-slate-500 truncate">
+                {thread.lastDirection === 'out' ? `You: ${thread.preview}` : thread.preview}
+              </span>
+              <span className="shrink-0 text-[11px] text-slate-400">{thread.time}</span>
             </div>
           </button>
         ))}
