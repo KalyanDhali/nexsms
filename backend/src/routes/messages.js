@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import { query } from '../models/db.js';
 import { authenticate } from '../middleware/auth.js';
-import { sendSmsWithFailover } from '../services/providerService.js';
+import {
+  sendNow,
+  scheduleMessage,
+  getDailyLimit,
+  getDailyUsage,
+  getBurstLimit,
+} from '../services/messageService.js';
+import { checkBurst } from '../services/burstLimit.js';
 
 const router = Router();
 
@@ -31,11 +38,53 @@ router.get('/conversations/:id/messages', async (req, res) => {
   await query('UPDATE conversations SET unread_count = 0 WHERE id = $1', [req.params.id]);
 
   const { rows } = await query(
-    `SELECT id, direction, body, status, cost, created_at AS time
+    `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, created_at AS time
      FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
     [req.params.id]
   );
   res.json({ messages: rows });
+});
+
+// GET delivery status of a single message
+router.get('/messages/:id', async (req, res) => {
+  const { rows } = await query(
+    `SELECT m.id, m.status, m.message_sid, m.delivered_at, m.scheduled_at, m.error, m.cost,
+            p.name AS provider_name
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     LEFT JOIN providers p ON p.id = m.provider_id
+     WHERE m.id = $1 AND c.user_id = $2`,
+    [req.params.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+  res.json({ message: rows[0] });
+});
+
+// List scheduled messages for current user
+router.get('/scheduled', async (req, res) => {
+  const { rows } = await query(
+    `SELECT m.id, m.body, m.scheduled_at, m.status, n.number AS from_number, c.contact_number AS to_number
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     JOIN numbers n ON n.id = c.number_id
+     WHERE c.user_id = $1 AND m.status = 'scheduled'
+     ORDER BY m.scheduled_at ASC`,
+    [req.user.id]
+  );
+  res.json({ messages: rows });
+});
+
+// Cancel a scheduled message
+router.post('/scheduled/:id/cancel', async (req, res) => {
+  const { rows } = await query(
+    `UPDATE messages m SET status = 'cancelled'
+     FROM conversations c
+     WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2 AND m.status = 'scheduled'
+     RETURNING m.id`,
+    [req.params.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Scheduled message not found' });
+  res.json({ ok: true });
 });
 
 // Create conversation
@@ -59,9 +108,9 @@ router.post('/conversations', async (req, res) => {
   res.status(201).json({ conversationId: rows[0].id });
 });
 
-// Send SMS — the core send endpoint with daily limit + cost deduction + failover
+// Send SMS — supports immediate send or scheduled (scheduledAt in future)
 router.post('/send', async (req, res) => {
-  const { to, fromNumberId, body } = req.body;
+  const { to, fromNumberId, body, scheduledAt } = req.body;
   let conversationId = req.body.conversationId;
   let numberId = fromNumberId;
   let contactNumber = to;
@@ -96,95 +145,70 @@ router.post('/send', async (req, res) => {
       conversationId = conv[0].id;
     }
 
-    const { rows: numberRows } = await query('SELECT * FROM numbers WHERE id = $1', [numberId]);
-    const number = numberRows[0];
-
-    // --- Daily per-number limit check ---
-    const limitConfig = await getDailyLimit(req.user, number);
-    if (limitConfig) {
-      const today = new Date().toISOString().slice(0, 10);
-      const { rows: usageRows } = await query(
-        `SELECT count FROM daily_limits WHERE number_id = $1 AND send_date = $2`,
-        [numberId, today]
-      );
-      const used = usageRows.length ? usageRows[0].count : 0;
-      if (used >= limitConfig) {
-        return res.status(429).json({
-          error: 'Daily send limit reached for this number',
-          limit: limitConfig,
-          used,
-          resetIn: '24 hours',
-        });
+    // --- Scheduled send ---
+    if (scheduledAt) {
+      const scheduledDate = new Date(scheduledAt);
+      if (isNaN(scheduledDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid scheduledAt' });
       }
+      if (scheduledDate.getTime() <= Date.now()) {
+        return res.status(400).json({ error: 'scheduledAt must be in the future' });
+      }
+      const messageId = await scheduleMessage({
+        userId: req.user.id,
+        conversationId,
+        body,
+        scheduledAt: scheduledDate.toISOString(),
+      });
+      return res.status(201).json({ messageId, status: 'scheduled', scheduledAt: scheduledDate.toISOString() });
     }
 
-    // --- Cost & balance check ---
-    const smsRate = await getSmsRate();
-    const cost = smsRate * 1;
-    if (req.user.billing_mode === 'prepaid') {
-      if (Number(req.user.balance) < cost) {
-        return res.status(402).json({ error: 'Insufficient balance', cost });
-      }
-    } else {
-      // subscription: check quota
-      const { rows: sub } = await query(
-        `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY started_at DESC LIMIT 1`,
-        [req.user.id]
-      );
-      if (sub.length && sub[0].sms_used >= sub[0].sms_quota) {
-        const billingSettings = await getBillingSettings();
-        if (billingSettings.quotaExhausted === 'block') {
-          return res.status(402).json({ error: 'Monthly SMS quota exhausted' });
-        }
-      }
+    // --- Immediate send ---
+
+    // Burst rate limit (per-user sliding window)
+    const burstLimit = await getBurstLimit();
+    const burst = checkBurst(req.user.id, burstLimit);
+    if (!burst.allowed) {
+      return res.status(429).json({
+        error: 'Too many messages, slow down',
+        retryAfterMs: Math.max(burst.retryAfterMs, 100),
+      });
     }
 
-    // --- Insert message as pending ---
+    // Insert message as pending first so it exists for accounting/tracking
     const { rows: msg } = await query(
       `INSERT INTO messages (conversation_id, direction, body, status, cost)
-       VALUES ($1, 'out', $2, 'pending', $3) RETURNING id`,
-      [conversationId, body, cost]
-    );
-
-    // --- Send via provider with failover ---
-    const fromNumber = number.number;
-    const result = await sendSmsWithFailover({ from: fromNumber, to: contactNumber, body });
-
-    // --- Update message + conversation ---
-    await query(
-      `UPDATE messages SET status = 'sent', provider_id = $2, message_sid = $3 WHERE id = $1`,
-      [msg[0].id, result.providerId, result.sid]
-    );
-    await query(
-      `UPDATE conversations SET last_message = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
+       SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079)
+       RETURNING id`,
       [conversationId, body]
     );
 
-    // --- Deduct cost for prepaid ---
-    if (req.user.billing_mode === 'prepaid') {
-      await deductBalance(req.user.id, cost, msg[0].id);
-    } else {
-      const { rows: sub } = await query(
-        `SELECT id FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY started_at DESC LIMIT 1`,
-        [req.user.id]
-      );
-      if (sub.length) {
-        await query('UPDATE subscriptions SET sms_used = sms_used + 1 WHERE id = $1', [sub[0].id]);
-      }
-    }
-
-    // --- Increment daily counter ---
-    await incrementDailyCount(numberId);
-
-    res.json({
+    const result = await sendNow({
+      userId: req.user.id,
+      numberId,
+      conversationId,
+      contactNumber,
+      body,
       messageId: msg[0].id,
-      sid: result.sid,
-      provider: result.providerName,
-      cost,
-      status: 'sent',
     });
+
+    res.json(result);
   } catch (err) {
     console.error('Send SMS error:', err);
+
+    if (err.code === 'LIMIT_REACHED') {
+      const { rows: numberRows } = await query('SELECT * FROM numbers WHERE id = $1', [numberId]);
+      const limitConfig = await getDailyLimit(req.user, numberRows[0]);
+      const used = await getDailyUsage(numberId);
+      return res.status(429).json({ error: err.message, limit: limitConfig, used, resetIn: '24 hours' });
+    }
+    if (err.code === 'INSUFFICIENT_BALANCE') {
+      return res.status(402).json({ error: err.message, cost: err.cost });
+    }
+    if (err.code === 'QUOTA_EXHAUSTED' || err.code === 'NO_SUBSCRIPTION') {
+      return res.status(402).json({ error: err.message });
+    }
+
     if (conversationId && body) {
       await query(
         `UPDATE messages SET status = 'failed', error = $2
@@ -195,64 +219,5 @@ router.post('/send', async (req, res) => {
     res.status(500).json({ error: err.message || 'Failed to send SMS' });
   }
 });
-
-async function getDailyLimit(user, number) {
-  const { rows: settings } = await query(
-    `SELECT value FROM settings WHERE key = 'billing'`
-  );
-  const billing = settings[0]?.value || {};
-
-  // Per-user override first
-  if (user.daily_limit_override) return Number(user.daily_limit_override);
-
-  // Then subscription plan limit
-  const { rows: sub } = await query(
-    `SELECT s.*, p.daily_limit_per_number FROM subscriptions s JOIN plans p ON p.id = s.plan_id
-     WHERE s.user_id = $1 AND s.status = 'active' ORDER BY s.started_at DESC LIMIT 1`,
-    [user.id]
-  );
-  if (sub.length && sub[0].daily_limit_per_number) {
-    return Number(sub[0].daily_limit_per_number);
-  }
-
-  // Pay-per-sms default (admin configurable)
-  const { rows: pp } = await query(`SELECT value FROM settings WHERE key = 'pay_per_sms_limit'`);
-  if (pp.length && pp[0].value.daily) return Number(pp[0].value.daily);
-
-  return 50; // safe default
-}
-
-async function getSmsRate() {
-  const { rows } = await query(`SELECT value FROM settings WHERE key = 'sms_rate'`);
-  if (rows.length && rows[0].value.rate) return Number(rows[0].value.rate);
-  return 0.0079; // default ~Twilio rate
-}
-
-async function getBillingSettings() {
-  const { rows } = await query(`SELECT value FROM settings WHERE key = 'billing'`);
-  return rows[0]?.value || {};
-}
-
-async function deductBalance(userId, cost, messageId) {
-  await query(
-    `UPDATE users SET balance = balance - $2 WHERE id = $1`,
-    [userId, cost]
-  );
-  const { rows } = await query('SELECT balance FROM users WHERE id = $1', [userId]);
-  await query(
-    `INSERT INTO transactions (user_id, type, amount, balance_after, reference, status)
-     VALUES ($1, 'sms_cost', $2, $3, $4, 'completed')`,
-    [userId, -cost, rows[0].balance, messageId]
-  );
-}
-
-async function incrementDailyCount(numberId) {
-  const today = new Date().toISOString().slice(0, 10);
-  await query(
-    `INSERT INTO daily_limits (number_id, send_date, count) VALUES ($1, $2, 1)
-     ON CONFLICT (number_id, send_date) DO UPDATE SET count = daily_limits.count + 1`,
-    [numberId, today]
-  );
-}
 
 export default router;

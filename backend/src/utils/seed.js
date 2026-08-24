@@ -32,6 +32,7 @@ async function seed() {
     ['currency', JSON.stringify({ base: 'USD', rates: { USDT: 1, BTC: 0.000015 } })],
     ['sms_rate', JSON.stringify({ rate: 0.0079 })],
     ['pay_per_sms_limit', JSON.stringify({ daily: 50 })],
+    ['burst_limit', JSON.stringify({ perSecond: 3 })],
   ];
 
   for (const [key, value] of settings) {
