@@ -34,6 +34,7 @@ export default function ConversationView({
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const composerRef = useRef(null);
+  const emojiRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,6 +61,17 @@ export default function ConversationView({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [menuFor]);
+
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const handler = (e) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) {
+        setEmojiOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [emojiOpen]);
 
   const handleSave = async (url) => {
     try {
@@ -204,7 +216,7 @@ export default function ConversationView({
           />
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={emojiRef}>
           <button
             type="button"
             onClick={() => {
@@ -224,7 +236,6 @@ export default function ConversationView({
           {emojiOpen && (
             <EmojiPicker
               onSelect={(e) => setDraft((d) => d + e)}
-              onClose={() => setEmojiOpen(false)}
             />
           )}
         </div>

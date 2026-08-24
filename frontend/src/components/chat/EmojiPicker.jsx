@@ -927,7 +927,6 @@ export default function EmojiPicker({ onSelect, onClose }) {
   const pick = (item) => {
     setRecent((r) => [item, ...r.filter((x) => x.e !== item.e)].slice(0, 12));
     onSelect(item.e);
-    onClose();
   };
 
   return (
