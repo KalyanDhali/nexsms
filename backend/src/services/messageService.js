@@ -75,21 +75,12 @@ export async function deductBalance(userId, cost, messageId) {
   );
 }
 
-export async function consumeSubscriptionQuota(userId) {
-  const { rows: sub } = await query(
-    `SELECT id FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY started_at DESC LIMIT 1`,
-    [userId]
-  );
-  if (sub.length) {
-    await query('UPDATE subscriptions SET sms_used = sms_used + 1 WHERE id = $1', [sub[0].id]);
-    return sub[0].id;
-  }
-  return null;
-}
-
 export async function getActiveSubscription(userId) {
   const { rows } = await query(
-    `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY started_at DESC LIMIT 1`,
+    `SELECT s.*, p.sms_quota, p.daily_limit_per_number
+     FROM subscriptions s
+     JOIN plans p ON p.id = s.plan_id
+     WHERE s.user_id = $1 AND s.status = 'active' ORDER BY s.started_at DESC LIMIT 1`,
     [userId]
   );
   return rows[0] || null;
@@ -125,28 +116,41 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
   // Cost & balance check
   const smsRate = await getSmsRate();
   const cost = smsRate * 1;
-  if (user.billing_mode === 'prepaid') {
-    if (Number(user.balance) < cost) {
-      const err = new Error('Insufficient balance');
-      err.code = 'INSUFFICIENT_BALANCE';
-      err.cost = cost;
-      throw err;
-    }
-  } else {
-    const sub = await getActiveSubscription(userId);
-    if (!sub) {
+
+  // Determine how this message is paid:
+  //   prepaid      -> balance only
+  //   subscription -> plan quota only (excess per quotaExhausted)
+  //   hybrid       -> quota first, then balance
+  const sub = user.billing_mode === 'prepaid' ? null : await getActiveSubscription(userId);
+  let payFrom = 'balance';
+  if (user.billing_mode === 'subscription' || user.billing_mode === 'hybrid') {
+    if (sub) {
+      if (sub.sms_used < sub.sms_quota) {
+        payFrom = 'quota';
+      } else if (user.billing_mode === 'subscription') {
+        const billingSettings = await getBillingSettings();
+        if (billingSettings.quotaExhausted === 'block') {
+          const err = new Error('Monthly SMS quota exhausted');
+          err.code = 'QUOTA_EXHAUSTED';
+          throw err;
+        }
+        // quotaExhausted = 'charge' -> fall through to balance
+        payFrom = 'balance';
+      }
+      // hybrid with exhausted quota -> fall through to balance
+    } else if (user.billing_mode === 'subscription') {
       const err = new Error('No active subscription');
       err.code = 'NO_SUBSCRIPTION';
       throw err;
     }
-    if (sub.sms_used >= sub.sms_quota) {
-      const billingSettings = await getBillingSettings();
-      if (billingSettings.quotaExhausted === 'block') {
-        const err = new Error('Monthly SMS quota exhausted');
-        err.code = 'QUOTA_EXHAUSTED';
-        throw err;
-      }
-    }
+    // hybrid without subscription -> balance
+  }
+
+  if (payFrom === 'balance' && Number(user.balance) < cost) {
+    const err = new Error('Insufficient balance');
+    err.code = 'INSUFFICIENT_BALANCE';
+    err.cost = cost;
+    throw err;
   }
 
   // Send via provider with failover
@@ -163,14 +167,14 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
   );
 
   // Accounting
-  if (user.billing_mode === 'prepaid') {
-    await deductBalance(userId, cost, messageId);
+  if (payFrom === 'quota') {
+    await query('UPDATE subscriptions SET sms_used = sms_used + 1 WHERE id = $1', [sub.id]);
   } else {
-    await consumeSubscriptionQuota(userId);
+    await deductBalance(userId, cost, messageId);
   }
   await incrementDailyCount(numberId);
 
-  return { messageId, sid: result.sid, providerName: result.providerName, cost, status: 'sent', tried: result.tried };
+  return { messageId, sid: result.sid, providerName: result.providerName, cost, status: 'sent', tried: result.tried, payFrom };
 }
 
 /**

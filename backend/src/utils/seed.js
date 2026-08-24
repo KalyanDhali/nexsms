@@ -71,10 +71,21 @@ async function seed() {
   ];
 
   for (const [name, slug, type, creds, fee, priority] of gateways) {
+    const wallet =
+      type === 'wallet'
+        ? {
+            trc20: 'TRiVcUS2bV2RgQRWmQyLwv8QgXn1QmDQYq',
+            bep20: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+            btc: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+          }[slug]
+        : null;
     await query(
-      `INSERT INTO payment_gateways (name, slug, type, credentials, fee_percent, priority)
-       VALUES ($1,$2,$3,$4::jsonb,$5,$6) ON CONFLICT (slug) DO NOTHING`,
-      [name, slug, type, JSON.stringify(creds), fee, priority]
+      `INSERT INTO payment_gateways (name, slug, type, credentials, fee_percent, priority, wallet_address)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)
+       ON CONFLICT (slug) DO UPDATE SET
+         wallet_address = COALESCE(payment_gateways.wallet_address, EXCLUDED.wallet_address),
+         fee_percent = COALESCE(payment_gateways.fee_percent, EXCLUDED.fee_percent)`,
+      [name, slug, type, JSON.stringify(creds), fee, priority, wallet]
     );
   }
 

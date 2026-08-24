@@ -7,6 +7,9 @@ import providerRoutes from './routes/providers.js';
 import webhookRoutes from './routes/webhooks.js';
 import messageRoutes from './routes/messages.js';
 import numberRoutes from './routes/numbers.js';
+import planRoutes from './routes/plans.js';
+import billingRoutes from './routes/billing.js';
+import paymentRoutes from './routes/payments.js';
 
 const app = express();
 
@@ -30,6 +33,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/numbers', numberRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
 // Public settings (theme, site name) for the frontend
