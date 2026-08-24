@@ -17,6 +17,11 @@ import kycRoutes from './routes/kyc.js';
 import templateRoutes from './routes/templates.js';
 import aiRoutes from './routes/ai.js';
 import userWebhookRoutes from './routes/userWebhooks.js';
+import uploadRoutes from './routes/uploads.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.set('trust proxy', true);
@@ -52,6 +57,8 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/user-webhooks', userWebhookRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/media', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Public landing-page stats
 app.get('/api/public/stats', async (req, res) => {

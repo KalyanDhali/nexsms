@@ -125,6 +125,7 @@ export const createConversation = (payload) => api.post('/messages/conversations
 export const sendSms = (payload) => api.post('/messages/send', payload);
 export const getUserAnalytics = () => api.get('/messages/analytics');
 export const sendBlast = (payload) => api.post('/messages/blast', payload);
+export const uploadSmsImage = (payload) => api.post('/uploads', payload);
 
 export const getAdminAnalytics = () => api.get('/admin/analytics');
 export const getAdminApiKeys = () => api.get('/admin/keys');

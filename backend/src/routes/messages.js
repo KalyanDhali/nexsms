@@ -159,6 +159,7 @@ router.post('/send', async (req, res) => {
         conversationId,
         body,
         scheduledAt: scheduledDate.toISOString(),
+        mediaUrl: media_url || null,
       });
       return res.status(201).json({ messageId, status: 'scheduled', scheduledAt: scheduledDate.toISOString() });
     }
@@ -252,7 +253,7 @@ router.get('/analytics', async (req, res) => {
 // Bulk blast — send the same body to many recipients from one number.
 // Gated by bulk_blast toggle; enforces burst + per-number daily limits.
 router.post('/blast', async (req, res) => {
-  const { to, fromNumberId, body, scheduledAt } = req.body;
+  const { to, fromNumberId, body, scheduledAt, media_url } = req.body;
 
   const { rows: toggle } = await query(`SELECT enabled FROM feature_toggles WHERE key = 'bulk_blast'`);
   if (!toggle.length || !toggle[0].enabled) {
@@ -298,17 +299,17 @@ router.post('/blast', async (req, res) => {
       const conversationId = conv[0].id;
 
       if (scheduledDate) {
-        const messageId = await scheduleMessage({ userId: req.user.id, conversationId, body, scheduledAt: scheduledDate.toISOString() });
+        const messageId = await scheduleMessage({ userId: req.user.id, conversationId, body, scheduledAt: scheduledDate.toISOString(), mediaUrl: media_url || null });
         scheduled++;
         results.push({ to: contact, status: 'scheduled', messageId });
       } else {
         const { rows: msg } = await query(
-          `INSERT INTO messages (conversation_id, direction, body, status, cost)
-           SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079)
+          `INSERT INTO messages (conversation_id, direction, body, status, cost, media_url)
+           SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079), $3
            RETURNING id`,
-          [conversationId, body]
+          [conversationId, body, media_url || null]
         );
-        const r = await sendNow({ userId: req.user.id, numberId: numberRows[0].id, conversationId, contactNumber: contact, body, messageId: msg[0].id });
+        const r = await sendNow({ userId: req.user.id, numberId: numberRows[0].id, conversationId, contactNumber: contact, body, messageId: msg[0].id, mediaUrl: media_url || null });
         sent++;
         results.push({ to: contact, status: 'sent', messageId: r.messageId });
       }

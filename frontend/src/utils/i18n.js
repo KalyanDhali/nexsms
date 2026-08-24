@@ -37,6 +37,7 @@ export const translations = {
       failed: 'Failed',
       myNumbers: 'My numbers',
       mediaUrl: 'Media/MMS image URL (optional)',
+      imageTooLarge: 'Image too large (max 8MB)',
     },
   },
   zh: {
@@ -77,6 +78,7 @@ export const translations = {
       failed: '失败',
       myNumbers: '我的号码',
       mediaUrl: '媒体/MMS 图片地址（可选）',
+      imageTooLarge: '图片过大（最大 8MB）',
     },
   },
 };

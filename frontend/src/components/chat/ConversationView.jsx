@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
-import { getTemplates } from '../../services/api.js';
+import { getTemplates, uploadSmsImage } from '../../services/api.js';
 
 function NewConversation({ onStartNew, onCancel }) {
   const { t } = useLanguage();
@@ -51,9 +51,11 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
   const { t } = useLanguage();
   const [draft, setDraft] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
-  const [showMedia, setShowMedia] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -63,6 +65,31 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
   useEffect(() => {
     getTemplates().then(({ data }) => setTemplates(data.templates)).catch(() => {});
   }, []);
+
+  const pickFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadError(t('chat.imageTooLarge'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      setUploading(true);
+      setUploadError('');
+      try {
+        const { data } = await uploadSmsImage({ filename: file.name, data: dataUrl });
+        setMediaUrl(data.url);
+      } catch (err) {
+        setUploadError(err.response?.data?.error || 'Upload failed');
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!thread) {
     return <NewConversation onStartNew={onStartNew} onCancel={() => {}} />;
@@ -74,7 +101,6 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
       onSend(draft, mediaUrl.trim() || null);
       setDraft('');
       setMediaUrl('');
-      setShowMedia(false);
     }
   };
 
@@ -127,14 +153,27 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
       </div>
 
       <form onSubmit={submit} className="px-4 py-3 border-t border-slate-200 bg-white">
-        {showMedia && (
-          <input
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder={t('chat.mediaUrl')}
-            className="w-full mb-2 px-4 py-2 rounded-xl bg-slate-100 focus:bg-white border border-transparent focus:border-primary text-sm outline-none transition"
-          />
+        {mediaUrl && (
+          <div className="mb-2 flex items-center gap-2">
+            <div className="relative shrink-0">
+              <img src={mediaUrl} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+              <button
+                type="button"
+                onClick={() => setMediaUrl('')}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <input
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              placeholder={t('chat.mediaUrl')}
+              className="flex-1 px-4 py-2 rounded-xl bg-slate-100 focus:bg-white border border-transparent focus:border-primary text-sm outline-none transition"
+            />
+          </div>
         )}
+        {uploadError && <div className="mb-2 text-xs text-red-500">{uploadError}</div>}
         <div className="flex items-center gap-2">
           <div className="relative">
             <button
@@ -167,12 +206,14 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
           </div>
           <button
             type="button"
-            onClick={() => setShowMedia((v) => !v)}
-            className={`h-10 px-3 rounded-xl border text-sm transition ${showMedia ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-50'}`}
-            title="MMS media"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className={`h-10 px-3 rounded-xl border text-sm transition ${uploading ? 'opacity-50' : 'text-slate-500 hover:bg-slate-50'}`}
+            title="Attach image (MMS)"
           >
-            ▣
+            {uploading ? '…' : '▣'}
           </button>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

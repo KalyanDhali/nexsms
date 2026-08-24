@@ -208,12 +208,12 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
  * Create a scheduled message (not yet sent). Cost / limits are applied
  * later by the scheduler at send time.
  */
-export async function scheduleMessage({ userId, conversationId, body, scheduledAt }) {
+export async function scheduleMessage({ userId, conversationId, body, scheduledAt, mediaUrl }) {
   const cost = await getSmsRate();
   const { rows } = await query(
-    `INSERT INTO messages (conversation_id, direction, body, status, cost, scheduled_at)
-     VALUES ($1, 'out', $2, 'scheduled', $3, $4) RETURNING id`,
-    [conversationId, body, cost, scheduledAt]
+    `INSERT INTO messages (conversation_id, direction, body, status, cost, scheduled_at, media_url)
+     VALUES ($1, 'out', $2, 'scheduled', $3, $4, $5) RETURNING id`,
+    [conversationId, body, cost, scheduledAt, mediaUrl || null]
   );
   await query(
     `UPDATE conversations SET last_message = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
