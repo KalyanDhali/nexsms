@@ -86,6 +86,14 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-slate-700">${Number(user?.balance || 0).toFixed(2)}</span>
+          {user?.role === 'admin' && (
+            <a
+              href="/admin"
+              className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
+            >
+              Admin
+            </a>
+          )}
           <button
             onClick={logout}
             className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"

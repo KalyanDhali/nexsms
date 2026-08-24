@@ -10,6 +10,7 @@ import numberRoutes from './routes/numbers.js';
 import planRoutes from './routes/plans.js';
 import billingRoutes from './routes/billing.js';
 import paymentRoutes from './routes/payments.js';
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api/numbers', numberRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
 // Public settings (theme, site name) for the frontend
