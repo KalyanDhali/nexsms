@@ -1,20 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { getTemplates, uploadSmsImage, getMyNumbers } from '../../services/api.js';
-import Keypad from './Keypad.jsx';
 
-export default function ConversationView({ thread, onSend, onStartNew }) {
+export default function ConversationView({ thread, onSend, onStartNew, dialInput, onDialChange, fromNumber }) {
   const { t } = useLanguage();
   const [draft, setDraft] = useState('');
-  const [contact, setContact] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [keypadOpen, setKeypadOpen] = useState(true);
   const [numbers, setNumbers] = useState([]);
-  const [fromNumber, setFromNumber] = useState('');
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -27,7 +23,6 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
     getMyNumbers()
       .then(({ data }) => {
         setNumbers(data.numbers);
-        if (data.numbers.length) setFromNumber(data.numbers[0].number);
       })
       .catch(() => {});
   }, []);
@@ -67,47 +62,29 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
 
   const startNew = (e) => {
     e.preventDefault();
-    if (contact.trim()) {
-      onStartNew(contact.trim());
-      setContact('');
-    }
-  };
-
-  // Google Voice style: keypad appends to the active text target
-  const onKey = (digit) => {
-    if (!thread) {
-      setContact((c) => c + digit);
-    } else {
-      setDraft((d) => d + digit);
-    }
-  };
-
-  const onBackspace = () => {
-    if (!thread) {
-      setContact((c) => c.slice(0, -1));
-    } else {
-      setDraft((d) => d.slice(0, -1));
+    if (dialInput.trim()) {
+      onStartNew(dialInput.trim());
+      onDialChange('');
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-50">
+    <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
       {!thread ? (
         <form onSubmit={startNew} className="flex-1 flex flex-col min-h-0">
           <div className="px-5 py-3.5 border-b border-slate-200 bg-white">
-            <div className="font-semibold text-slate-900">{t('chat.newMessage')}</div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500 shrink-0">{t('chat.to')}:</span>
               <input
                 autoFocus
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
+                value={dialInput}
+                onChange={(e) => onDialChange(e.target.value)}
                 placeholder={t('chat.enterNumber')}
                 className="flex-1 px-3 py-2 rounded-xl border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm outline-none transition"
               />
               <button
                 type="submit"
-                disabled={!contact.trim()}
+                disabled={!dialInput.trim()}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold disabled:opacity-40"
               >
                 {t('chat.start')}
@@ -118,12 +95,6 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
           <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
             {t('chat.noContacts')}
           </div>
-          {keypadOpen && <Keypad onKey={onKey} onBackspace={onBackspace} onHide={() => setKeypadOpen(false)} />}
-          {!keypadOpen && (
-            <button type="button" onClick={() => setKeypadOpen(true)} className="border-t border-slate-200 bg-white py-1.5 text-xs text-slate-500 hover:text-slate-700">
-              {t('chat.showKeypad')}
-            </button>
-          )}
         </form>
       ) : (
         <>
@@ -133,19 +104,8 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
                 <div className="font-semibold text-slate-900">{thread.name}</div>
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                  {thread.messages[0]?.direction === 'in' ? 'Client' : 'Conversation'}
+                  {fromNumber ? `${t('chat.sendAs')}: ${fromNumber}` : (thread.messages[0]?.direction === 'in' ? 'Client' : 'Conversation')}
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 hidden sm:inline">{t('chat.sendAs')}:</span>
-                <select
-                  value={fromNumber}
-                  onChange={(e) => setFromNumber(e.target.value)}
-                  className="px-2 py-1 text-xs rounded-lg border border-slate-200 text-slate-600 bg-white"
-                >
-                  {numbers.length === 0 && <option value="">{t('chat.myNumbers')}</option>}
-                  {numbers.map((n) => <option key={n.id} value={n.number}>{n.number}</option>)}
-                </select>
               </div>
             </div>
           </div>
@@ -258,14 +218,6 @@ export default function ConversationView({ thread, onSend, onStartNew }) {
               </button>
             </div>
           </form>
-
-          {keypadOpen ? (
-            <Keypad onKey={onKey} onBackspace={onBackspace} onHide={() => setKeypadOpen(false)} />
-          ) : (
-            <button type="button" onClick={() => setKeypadOpen(true)} className="border-t border-slate-200 bg-white py-1.5 text-xs text-slate-500 hover:text-slate-700">
-              {t('chat.showKeypad')}
-            </button>
-          )}
         </>
       )}
     </div>

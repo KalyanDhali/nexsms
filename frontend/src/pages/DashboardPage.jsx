@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
+import { getMyNumbers } from '../services/api.js';
 import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
+import KeypadPanel from '../components/chat/KeypadPanel.jsx';
 import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
 import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
@@ -66,8 +68,21 @@ export default function DashboardPage() {
   const [threads, setThreads] = useState(mockThreads);
   const [activeThread, setActiveThread] = useState(mockThreads[0].id);
   const [search, setSearch] = useState('');
+  const [dialInput, setDialInput] = useState('');
+  const [fromNumber, setFromNumber] = useState('');
+  const [keypadOpen, setKeypadOpen] = useState(true);
+  const [numbers, setNumbers] = useState([]);
   const [tab, setTab] = useState('messages');
   const [blastOpen, setBlastOpen] = useState(false);
+
+  useEffect(() => {
+    getMyNumbers()
+      .then(({ data }) => {
+        setNumbers(data.numbers);
+        if (data.numbers.length) setFromNumber(data.numbers[0].number);
+      })
+      .catch(() => {});
+  }, []);
 
   const active = threads.find((th) => th.id === activeThread);
 
@@ -87,9 +102,32 @@ export default function DashboardPage() {
     );
   };
 
+  const startNewThread = (contact) => {
+    const newThread = {
+      id: Date.now(),
+      name: contact,
+      preview: 'No messages yet',
+      time: 'Now',
+      unread: 0,
+      lastDirection: 'in',
+      messages: [],
+    };
+    setThreads((prev) => [newThread, ...prev]);
+    setActiveThread(newThread.id);
+    setDialInput('');
+    setSearch('');
+  };
+
+  const onKey = (digit) => setDialInput((d) => d + digit);
+  const onBackspace = () => setDialInput((d) => d.slice(0, -1));
+
+  const listFilter = search.trim() || dialInput.trim();
   const filtered = threads.filter((th) =>
-    th.name.toLowerCase().includes(search.toLowerCase())
+    th.name.toLowerCase().includes(listFilter.toLowerCase()) || th.preview.toLowerCase().includes(listFilter.toLowerCase())
   );
+  const matches = dialInput.trim()
+    ? threads.filter((th) => th.name.toLowerCase().includes(dialInput.toLowerCase()))
+    : [];
 
   return (
     <div className="h-screen flex flex-col bg-white">
@@ -158,24 +196,33 @@ export default function DashboardPage() {
             onSelect={setActiveThread}
             search={search}
             onSearch={setSearch}
-            onNew={() => setActiveThread(null)}
+            onNew={() => {
+              setActiveThread(null);
+              setDialInput('');
+              setSearch('');
+            }}
           />
           <ConversationView
             thread={active}
             onSend={sendMessage}
-            onStartNew={(contact) => {
-              const newThread = {
-                id: Date.now(),
-                name: contact,
-                preview: 'No messages yet',
-                time: 'Now',
-                unread: 0,
-                lastDirection: 'in',
-                messages: [],
-              };
-              setThreads((prev) => [newThread, ...prev]);
-              setActiveThread(newThread.id);
-            }}
+            onStartNew={startNewThread}
+            dialInput={dialInput}
+            onDialChange={setDialInput}
+            fromNumber={fromNumber}
+          />
+          <KeypadPanel
+            open={keypadOpen}
+            onToggle={() => setKeypadOpen((v) => !v)}
+            fromNumber={fromNumber}
+            onFromNumberChange={setFromNumber}
+            numbers={numbers}
+            input={dialInput}
+            onInputChange={setDialInput}
+            onKey={onKey}
+            onBackspace={onBackspace}
+            matches={matches}
+            onSelectMatch={(id) => setActiveThread(id)}
+            onStartNew={() => startNewThread(dialInput.trim())}
           />
         </div>
       ) : tab === 'numbers' ? (
