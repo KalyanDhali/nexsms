@@ -3,7 +3,9 @@ import { useLanguage } from '../../context/LanguageContext.jsx';
 import { getTemplates, uploadSmsImage, getMyNumbers } from '../../services/api.js';
 
 export default function ConversationView({ thread, onSend, onStartNew, dialInput, onDialChange, fromNumber }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const isZh = lang === 'zh';
+  const T = (en, zh) => (isZh ? zh : en);
   const [draft, setDraft] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
@@ -79,7 +81,7 @@ export default function ConversationView({ thread, onSend, onStartNew, dialInput
                 autoFocus
                 value={dialInput}
                 onChange={(e) => onDialChange(e.target.value)}
-                placeholder={t('chat.enterNumber')}
+                placeholder={T('Type a name or phone number', '输入姓名或电话号码')}
                 className="flex-1 px-3 py-2 rounded-xl border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm outline-none transition"
               />
               <button

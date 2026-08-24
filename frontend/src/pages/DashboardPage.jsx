@@ -3,9 +3,13 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { getMyNumbers } from '../services/api.js';
+import NavSidebar from '../components/chat/NavSidebar.jsx';
 import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
 import KeypadPanel from '../components/chat/KeypadPanel.jsx';
+import CallsPanel from '../components/chat/CallsPanel.jsx';
+import EmptyListPanel from '../components/chat/EmptyListPanel.jsx';
+import SettingsView from '../components/chat/SettingsView.jsx';
 import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
 import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
@@ -63,7 +67,9 @@ const mockThreads = [
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const isZh = lang === 'zh';
+  const T = (en, zh) => (isZh ? zh : en);
   const { theme } = useTheme();
   const [threads, setThreads] = useState(mockThreads);
   const [activeThread, setActiveThread] = useState(mockThreads[0].id);
@@ -73,6 +79,9 @@ export default function DashboardPage() {
   const [keypadOpen, setKeypadOpen] = useState(true);
   const [numbers, setNumbers] = useState([]);
   const [tab, setTab] = useState('messages');
+  const [nav, setNav] = useState('messages');
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
 
   useEffect(() => {
@@ -129,19 +138,109 @@ export default function DashboardPage() {
     ? threads.filter((th) => th.name.toLowerCase().includes(dialInput.toLowerCase()))
     : [];
 
+  const renderChatArea = () => (
+    <div className="flex flex-1 overflow-hidden">
+      <NavSidebar active={nav} onChange={setNav} collapsed={navCollapsed} />
+      {nav === 'messages' ? (
+        <ConversationList
+          threads={filtered}
+          activeId={activeThread}
+          onSelect={setActiveThread}
+          onNew={() => {
+            setActiveThread(null);
+            setDialInput('');
+            setSearch('');
+          }}
+        />
+      ) : nav === 'calls' ? (
+        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); setActiveThread(null); }} />
+      ) : (
+        <EmptyListPanel kind={nav} />
+      )}
+      {nav === 'messages' ? (
+        <ConversationView
+          thread={active}
+          onSend={sendMessage}
+          onStartNew={startNewThread}
+          dialInput={dialInput}
+          onDialChange={setDialInput}
+          fromNumber={fromNumber}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center bg-slate-50 text-sm text-slate-400 min-w-0">
+          {nav === 'calls' ? T('Call history', '通话记录') : ''}
+        </div>
+      )}
+      <KeypadPanel
+        open={keypadOpen}
+        onToggle={() => setKeypadOpen((v) => !v)}
+        fromNumber={fromNumber}
+        onFromNumberChange={setFromNumber}
+        numbers={numbers}
+        input={dialInput}
+        onInputChange={setDialInput}
+        onKey={onKey}
+        onBackspace={onBackspace}
+        matches={matches}
+        onSelectMatch={(id) => setActiveThread(id)}
+        onStartNew={() => startNewThread(dialInput.trim())}
+        onDial={() => {
+          if (dialInput.trim()) setNav('calls');
+        }}
+      />
+    </div>
+  );
+
   return (
     <div className="h-screen flex flex-col bg-white">
-      <header className="h-14 border-b border-slate-200 flex items-center justify-between px-4 bg-white">
-        <div className="flex items-center gap-3">
-          <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
-          <span className="font-semibold text-slate-900">{theme.siteName}</span>
-          <div className="ml-6 hidden sm:flex items-center gap-2 text-sm text-slate-500">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            {user?.email}
+      <header className="h-14 border-b border-slate-200 flex items-center gap-3 px-3 bg-white">
+        <button
+          onClick={() => setNavCollapsed((v) => !v)}
+          className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center text-lg transition"
+          title="Menu"
+        >
+          ≡
+        </button>
+        <span className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
+        <span className="font-semibold text-slate-900 hidden md:block">{theme.siteName}</span>
+
+        <div className="flex-1 flex justify-center px-2">
+          <div className="w-full max-w-xl flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f1f3f4] focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/40 border border-transparent focus-within:border-blue-500 transition">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={T('Search Google Voice', '搜索 Google Voice')}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+            />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2">
+          <span className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#e6f4ea] text-[#137333] text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+            {T('Receiving calls', '正在接听来电')}
+          </span>
+          <button
+            onClick={() => setTab('billing')}
+            className="hidden sm:block px-4 py-1.5 rounded-full bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
+          >
+            {T('Upgrade', '升级')}
+          </button>
           <span className="text-sm font-semibold text-slate-700">${Number(user?.balance || 0).toFixed(2)}</span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center transition"
+            title={T('Settings', '设置')}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
           {user?.role === 'admin' && (
             <a
               href="/admin"
@@ -154,7 +253,7 @@ export default function DashboardPage() {
             onClick={logout}
             className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
           >
-            {t('nav.login') === 'Sign in' ? 'Logout' : '退出'}
+            {isZh ? '退出' : 'Logout'}
           </button>
         </div>
       </header>
@@ -168,11 +267,11 @@ export default function DashboardPage() {
               tab === key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            {key === 'messages' ? (t('nav.login') === 'Sign in' ? 'Messages' : '消息')
-              : key === 'numbers' ? (t('nav.login') === 'Sign in' ? 'Numbers' : '号码')
-              : key === 'billing' ? (t('nav.login') === 'Sign in' ? 'Billing' : '账单')
-              : key === 'api' ? (t('nav.login') === 'Sign in' ? 'API' : 'API')
-              : (t('nav.login') === 'Sign in' ? 'Account' : '账户')}
+            {key === 'messages' ? (isZh ? '消息' : 'Messages')
+              : key === 'numbers' ? (isZh ? '号码' : 'Numbers')
+              : key === 'billing' ? (isZh ? '账单' : 'Billing')
+              : key === 'api' ? 'API'
+              : (isZh ? '账户' : 'Account')}
             {tab === key && (
               <span className="absolute -bottom-[11px] left-3 right-3 h-0.5 rounded-full" style={{ background: theme.primary }} />
             )}
@@ -183,48 +282,17 @@ export default function DashboardPage() {
             onClick={() => setBlastOpen(true)}
             className="ml-auto px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
           >
-            {t('nav.login') === 'Sign in' ? 'Bulk blast' : '批量群发'}
+            {isZh ? '批量群发' : 'Bulk blast'}
           </button>
         )}
       </div>
 
       {tab === 'messages' ? (
-        <div className="flex flex-1 overflow-hidden">
-          <ConversationList
-            threads={filtered}
-            activeId={activeThread}
-            onSelect={setActiveThread}
-            search={search}
-            onSearch={setSearch}
-            onNew={() => {
-              setActiveThread(null);
-              setDialInput('');
-              setSearch('');
-            }}
-          />
-          <ConversationView
-            thread={active}
-            onSend={sendMessage}
-            onStartNew={startNewThread}
-            dialInput={dialInput}
-            onDialChange={setDialInput}
-            fromNumber={fromNumber}
-          />
-          <KeypadPanel
-            open={keypadOpen}
-            onToggle={() => setKeypadOpen((v) => !v)}
-            fromNumber={fromNumber}
-            onFromNumberChange={setFromNumber}
-            numbers={numbers}
-            input={dialInput}
-            onInputChange={setDialInput}
-            onKey={onKey}
-            onBackspace={onBackspace}
-            matches={matches}
-            onSelectMatch={(id) => setActiveThread(id)}
-            onStartNew={() => startNewThread(dialInput.trim())}
-          />
-        </div>
+        settingsOpen ? (
+          <SettingsView fromNumber={fromNumber} balance={user?.balance} onClose={() => setSettingsOpen(false)} />
+        ) : (
+          renderChatArea()
+        )
       ) : tab === 'numbers' ? (
         <NumbersPanel />
       ) : tab === 'billing' ? (
