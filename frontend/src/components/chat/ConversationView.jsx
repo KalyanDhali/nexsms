@@ -28,6 +28,7 @@ export default function ConversationView({
   const [recipients, setRecipients] = useState([]);
   const [toFocused, setToFocused] = useState(false);
   const [lightbox, setLightbox] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const composerRef = useRef(null);
@@ -50,6 +51,30 @@ export default function ConversationView({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [composing, onCloseComposer]);
+
+  useEffect(() => {
+    if (!menuFor) return;
+    const handler = () => setMenuFor(null);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuFor]);
+
+  const handleSave = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = url.split('/').pop() || 'image.jpg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
 
   const digits = (s) => (s || '').replace(/[^0-9]/g, '');
   const fullNumber =
@@ -273,12 +298,49 @@ export default function ConversationView({
               <div key={msg.id} className={`flex ${msg.direction === 'out' ? 'justify-end' : 'justify-start'}`}>
                 {msg.mediaUrl ? (
                   <div className="max-w-[70%]">
-                    <img
-                      src={msg.mediaUrl}
-                      alt=""
-                      onClick={() => setLightbox(msg.mediaUrl)}
-                      className={`rounded-2xl max-w-[260px] max-h-64 object-cover shadow-sm cursor-zoom-in transition hover:opacity-90 ${msg.direction === 'out' ? '' : 'border border-slate-200'}`}
-                    />
+                    <div className="relative inline-block">
+                      <img
+                        src={msg.mediaUrl}
+                        alt=""
+                        onClick={() => setLightbox(msg.mediaUrl)}
+                        className={`rounded-2xl max-w-[260px] max-h-64 object-cover shadow-sm cursor-zoom-in transition hover:opacity-90 ${msg.direction === 'out' ? '' : 'border border-slate-200'}`}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuFor(msg.id === menuFor ? null : msg.id);
+                        }}
+                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition"
+                        title="More options"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                          <circle cx="12" cy="5" r="1.8" />
+                          <circle cx="12" cy="12" r="1.8" />
+                          <circle cx="12" cy="19" r="1.8" />
+                        </svg>
+                      </button>
+                      {menuFor === msg.id && (
+                        <div
+                          className="absolute top-9 right-0 z-20 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-32"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              handleSave(msg.mediaUrl);
+                              setMenuFor(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-gray-100 transition"
+                          >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            {T('Save', '保存')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {msg.body && (
                       <div className={`mt-1.5 ${msg.direction === 'out' ? 'text-right' : ''}`}>
                         <span
