@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
-import { getTemplates, uploadSmsImage, getMyNumbers } from '../../services/api.js';
+import { uploadSmsImage } from '../../services/api.js';
 
 const MAX_RECIPIENTS = 5;
 
@@ -21,10 +21,8 @@ export default function ConversationView({
   const [draft, setDraft] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [attachMenu, setAttachMenu] = useState('closed');
-  const [templates, setTemplates] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [numbers, setNumbers] = useState([]);
   const [recipients, setRecipients] = useState([]);
   const [toFocused, setToFocused] = useState(false);
   const fileInputRef = useRef(null);
@@ -56,15 +54,6 @@ export default function ConversationView({
     /^[0-9+()\s-]{7,}$/.test(dialInput.trim()) &&
     !recipients.some((r) => digits(r) === digits(dialInput)) &&
     !contacts.some((th) => digits(th.name) === digits(dialInput));
-
-  useEffect(() => {
-    getTemplates().then(({ data }) => setTemplates(data.templates)).catch(() => {});
-    getMyNumbers()
-      .then(({ data }) => {
-        setNumbers(data.numbers);
-      })
-      .catch(() => {});
-  }, []);
 
   const pickFile = (e) => {
     const file = e.target.files?.[0];
@@ -146,53 +135,28 @@ export default function ConversationView({
           </button>
           {attachMenu !== 'closed' && (
             <div className="absolute bottom-12 left-0 w-52 bg-white rounded-lg shadow-md border border-gray-100 py-1 z-20">
-              {attachMenu === 'main' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                      setAttachMenu('closed');
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition"
-                  >
-                    {T('Photos', '照片')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAttachMenu('templates')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition"
-                  >
-                    {T('Templates', '模板')}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="px-4 py-1.5 text-[11px] text-gray-400 uppercase tracking-wide">{T('Templates', '模板')}</div>
-                  {templates.length === 0 && <div className="px-4 py-2 text-sm text-gray-400">{T('No templates', '暂无模板')}</div>}
-                  {templates.map((tmpl) => (
-                    <button
-                      key={tmpl.id}
-                      type="button"
-                      onClick={() => {
-                        setDraft(tmpl.body);
-                        setAttachMenu('closed');
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
-                    >
-                      <span className="font-medium text-gray-800 block">{tmpl.name}</span>
-                      <span className="text-xs text-gray-400 truncate block">{tmpl.body}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setAttachMenu('main')}
-                    className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-50 transition"
-                  >
-                    ← {T('Back', '返回')}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setAttachMenu('closed');
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition flex items-center gap-2"
+              >
+                <span className="w-5 text-center text-gray-500">🖼</span>
+                {T('Photos', '照片')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setAttachMenu('closed');
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition flex items-center gap-2"
+              >
+                <span className="w-5 text-center text-gray-500">↑</span>
+                {T('Upload', '上传')}
+              </button>
             </div>
           )}
         </div>
