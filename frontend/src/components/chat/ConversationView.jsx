@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext.jsx';
 import { uploadSmsImage } from '../../services/api.js';
 
 import ImageLightbox from './ImageLightbox.jsx';
+import EmojiPicker from './EmojiPicker.jsx';
 
 const MAX_RECIPIENTS = 5;
 
@@ -29,6 +30,7 @@ export default function ConversationView({
   const [toFocused, setToFocused] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [menuFor, setMenuFor] = useState(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const composerRef = useRef(null);
@@ -155,7 +157,10 @@ export default function ConversationView({
         <div className="relative">
           <button
             type="button"
-            onClick={() => setAttachMenu((v) => (v === 'closed' ? 'main' : 'closed'))}
+            onClick={() => {
+              setAttachMenu((v) => (v === 'closed' ? 'main' : 'closed'));
+              setEmojiOpen(false);
+            }}
             className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition"
             title={T('Attach', '添加附件')}
           >
@@ -197,6 +202,31 @@ export default function ConversationView({
             placeholder={t('chat.typeMessage')}
             className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
           />
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setEmojiOpen((v) => !v);
+              if (attachMenu !== 'closed') setAttachMenu('closed');
+            }}
+            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+            title={T('Emoji', '表情')}
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+          </button>
+          {emojiOpen && (
+            <EmojiPicker
+              onSelect={(e) => setDraft((d) => d + e)}
+              onClose={() => setEmojiOpen(false)}
+            />
+          )}
         </div>
 
         <button
