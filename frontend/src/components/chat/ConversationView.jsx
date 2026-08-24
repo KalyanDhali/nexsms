@@ -26,6 +26,7 @@ export default function ConversationView({
   const [uploadError, setUploadError] = useState('');
   const [numbers, setNumbers] = useState([]);
   const [recipients, setRecipients] = useState([]);
+  const [toFocused, setToFocused] = useState(false);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const composerRef = useRef(null);
@@ -198,57 +199,57 @@ export default function ConversationView({
   return (
     <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
       {!thread && composing ? (
-        <div ref={composerRef} className="flex-1 flex flex-col min-h-0">
-          <div className="px-5 py-3.5 border-b border-slate-200 bg-white">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-slate-500 shrink-0">{t('chat.to')}:</span>
-              {recipients.map((r) => (
-                <span
-                  key={r}
-                  className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full pl-2.5 pr-1.5 py-1 text-sm"
+        <div ref={composerRef} className="flex-1 flex flex-col min-h-0 bg-white">
+          <div className="relative border-t border-b border-gray-200 px-4 py-3 flex items-center flex-wrap">
+            <span className="text-gray-700 font-medium mr-2 shrink-0">{t('chat.to')}:</span>
+            {recipients.map((r) => (
+              <span
+                key={r}
+                className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full pl-2.5 pr-1.5 py-1 text-sm mr-1.5"
+              >
+                {r}
+                <button
+                  type="button"
+                  onClick={() => removeRecipient(r)}
+                  className="w-4 h-4 rounded-full hover:bg-blue-100 text-blue-400 hover:text-blue-600 flex items-center justify-center leading-none"
                 >
-                  {r}
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              autoFocus
+              value={dialInput}
+              onChange={(e) => onDialChange(e.target.value)}
+              onFocus={() => setToFocused(true)}
+              onBlur={() => setTimeout(() => setToFocused(false), 120)}
+              placeholder={T('Type a name or phone number', '输入姓名或电话号码')}
+              className="flex-1 min-w-[160px] py-2 text-sm outline-none text-gray-800 placeholder-gray-500"
+            />
+
+            {(toFocused || dialInput.trim()) && (
+              <div className="absolute top-full left-4 mt-1 w-72 bg-white rounded-lg shadow-md border border-gray-100 z-10 overflow-hidden">
+                {fullNumber ? (
                   <button
-                    type="button"
-                    onClick={() => removeRecipient(r)}
-                    className="w-4 h-4 rounded-full hover:bg-blue-100 text-blue-400 hover:text-blue-600 flex items-center justify-center leading-none"
+                    onClick={() => addRecipient(dialInput.trim())}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-800 hover:bg-gray-50 transition flex items-center gap-2"
                   >
-                    ×
+                    <span className="w-7 h-7 shrink-0 rounded-full bg-blue-50 text-blue-600 font-semibold flex items-center justify-center">+</span>
+                    <span className="truncate">
+                      {T('Send new message to', '发送新消息给')} <b>{dialInput.trim()}</b>
+                    </span>
                   </button>
-                </span>
-              ))}
-              {recipients.length < MAX_RECIPIENTS && (
-                <input
-                  autoFocus
-                  value={dialInput}
-                  onChange={(e) => onDialChange(e.target.value)}
-                  placeholder={T('Type a name or phone number', '输入姓名或电话号码')}
-                  className="flex-1 min-w-[160px] py-2 text-sm outline-none"
-                />
-              )}
-            </div>
-            <div className="mt-1.5 text-xs text-slate-400">
-              {recipients.length >= MAX_RECIPIENTS
-                ? T('Maximum 5 recipients', '最多 5 个收件人')
-                : t('chat.addRecipients')}
-            </div>
+                ) : (
+                  <div className="p-6 text-center text-gray-500 text-sm">{t('chat.noContacts')}</div>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto py-1">
-            {fullNumber && (
-              <button
-                onClick={() => addRecipient(dialInput.trim())}
-                className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-100 transition text-left"
-              >
-                <span className="w-9 h-9 shrink-0 rounded-full bg-blue-50 text-blue-600 text-base font-semibold flex items-center justify-center">+</span>
-                <span className="text-sm text-slate-800">
-                  {T('Send new message to', '发送新消息给')} {dialInput.trim()}
-                </span>
-              </button>
-            )}
-            {!fullNumber && recipients.length < MAX_RECIPIENTS && (
-              <div className="text-center text-sm text-slate-400 py-6">{t('chat.noContacts')}</div>
-            )}
+          <div className="px-4 pt-1.5 text-xs text-slate-400">
+            {recipients.length >= MAX_RECIPIENTS
+              ? T('Maximum 5 recipients', '最多 5 个收件人')
+              : t('chat.addRecipients')}
           </div>
 
           {recipients.length > 0 && composerBar(submitCompose, true)}
