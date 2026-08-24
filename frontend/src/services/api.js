@@ -69,6 +69,10 @@ export const createProvider = (payload) => api.post('/providers', payload);
 export const updateProvider = (id, payload) => api.put(`/providers/${id}`, payload);
 export const toggleProvider = (id, payload) => api.patch(`/providers/${id}/toggle`, payload);
 export const providerHealthCheck = (id) => api.post(`/providers/${id}/health`);
+
+export const getApiKeys = () => api.get('/keys');
+export const createApiKey = (payload) => api.post('/keys', payload);
+export const revokeApiKey = (id) => api.post(`/keys/${id}/revoke`);
 export const providerTestConnection = (payload) => api.post('/providers/test-connection', payload);
 export const getPoolNumbers = (params) => api.get('/numbers/pool', { params });
 export const createNumber = (payload) => api.post('/numbers', payload);

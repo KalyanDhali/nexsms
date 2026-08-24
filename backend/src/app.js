@@ -11,6 +11,8 @@ import planRoutes from './routes/plans.js';
 import billingRoutes from './routes/billing.js';
 import paymentRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
+import apiKeyRoutes from './routes/apiKeys.js';
+import apiV1Routes from './routes/apiV1.js';
 
 const app = express();
 app.set('trust proxy', true);
@@ -40,6 +42,8 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/keys', apiKeyRoutes);
+app.use('/api/v1', apiV1Routes);
 
 // Public settings (theme, site name) for the frontend
 app.get('/api/settings/public', async (req, res) => {

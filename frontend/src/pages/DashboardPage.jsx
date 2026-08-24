@@ -6,6 +6,7 @@ import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
 import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
+import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
 
 const mockThreads = [
   {
@@ -105,7 +106,7 @@ export default function DashboardPage() {
       </header>
 
       <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white">
-        {['messages', 'numbers', 'billing'].map((key) => (
+        {['messages', 'numbers', 'billing', 'api'].map((key) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -115,7 +116,8 @@ export default function DashboardPage() {
           >
             {key === 'messages' ? (t('nav.login') === 'Sign in' ? 'Messages' : '消息')
               : key === 'numbers' ? (t('nav.login') === 'Sign in' ? 'Numbers' : '号码')
-              : (t('nav.login') === 'Sign in' ? 'Billing' : '账单')}
+              : key === 'billing' ? (t('nav.login') === 'Sign in' ? 'Billing' : '账单')
+              : (t('nav.login') === 'Sign in' ? 'API' : 'API')}
             {tab === key && (
               <span className="absolute -bottom-[11px] left-3 right-3 h-0.5 rounded-full" style={{ background: theme.primary }} />
             )}
@@ -152,8 +154,10 @@ export default function DashboardPage() {
         </div>
       ) : tab === 'numbers' ? (
         <NumbersPanel />
-      ) : (
+      ) : tab === 'billing' ? (
         <BillingPanel />
+      ) : (
+        <ApiKeysPanel />
       )}
     </div>
   );
