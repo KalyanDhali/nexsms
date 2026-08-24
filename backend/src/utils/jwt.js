@@ -17,6 +17,20 @@ export function signRefreshToken(user) {
   );
 }
 
+export function signTwoFaToken(user) {
+  return jwt.sign(
+    { sub: user.id, purpose: '2fa' },
+    config.jwt.secret,
+    { expiresIn: '5m' }
+  );
+}
+
+export function verifyTwoFaToken(token) {
+  const payload = jwt.verify(token, config.jwt.secret);
+  if (payload.purpose !== '2fa') throw new Error('Invalid token purpose');
+  return payload;
+}
+
 export function verifyAccessToken(token) {
   return jwt.verify(token, config.jwt.secret);
 }

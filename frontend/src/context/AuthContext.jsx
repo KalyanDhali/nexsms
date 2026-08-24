@@ -31,10 +31,26 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password });
+      if (data.twoFaRequired) {
+        return { ok: false, twoFaRequired: true, twoFaToken: data.twoFaToken };
+      }
       setSession(data);
       return { ok: true, user: data.user };
     } catch (err) {
       return { ok: false, error: err.response?.data?.error || 'Login failed' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeTwoFactorLogin = async (twoFaToken, code) => {
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/2fa/verify-login', { twoFaToken, code });
+      setSession(data);
+      return { ok: true, user: data.user };
+    } catch (err) {
+      return { ok: false, error: err.response?.data?.error || 'Invalid code' };
     } finally {
       setLoading(false);
     }
@@ -59,7 +75,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, setUser }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, setUser, completeTwoFactorLogin }}>
       {children}
     </AuthContext.Provider>
   );

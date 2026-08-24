@@ -4,7 +4,9 @@ import { useLanguage } from '../../context/LanguageContext.jsx';
 import {
   getUserProfile,
   changePassword,
-  toggleTwoFactor,
+  setupTwoFactor,
+  verifyTwoFactor,
+  disableTwoFactor,
   getPaymentGateways,
   createDeposit,
 } from '../../services/api.js';
@@ -29,6 +31,7 @@ export default function ProfileMenu() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [pwModal, setPwModal] = useState(false);
   const [fundModal, setFundModal] = useState(false);
+  const [faModal, setFaModal] = useState(false);
   const [toast, setToast] = useState('');
   const [twoFa, setTwoFa] = useState(!!user?.two_factor_enabled);
   const rootRef = useRef(null);
@@ -66,15 +69,7 @@ export default function ProfileMenu() {
     notify(T('API key copied', 'API 密钥已复制'));
   };
 
-  const handleToggle2fa = async () => {
-    try {
-      const { data } = await toggleTwoFactor();
-      setTwoFa(data.two_factor_enabled);
-      notify(data.two_factor_enabled ? T('2FA enabled', '已启用两步验证') : T('2FA disabled', '已禁用两步验证'));
-    } catch (e) {
-      notify(e.response?.data?.error || 'Failed');
-    }
-  };
+  const handleToggle2fa = () => setFaModal(true);
 
   const p = profile?.user || user || {};
   const usage = profile?.usage || { sms_sent: 0, call_minutes: 0, active_numbers: 0 };
@@ -247,6 +242,16 @@ export default function ProfileMenu() {
 
       {pwModal && <ChangePasswordModal onClose={() => setPwModal(false)} onDone={(m) => notify(m)} />}
       {fundModal && <AddBalanceModal onClose={() => setFundModal(false)} onDone={(m) => notify(m)} />}
+      {faModal && (
+        <TwoFactorModal
+          enabled={twoFa}
+          onClose={() => setFaModal(false)}
+          onDone={(enabled, msg) => {
+            setTwoFa(enabled);
+            notify(msg);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -403,6 +408,123 @@ function AddBalanceModal({ onClose, onDone }) {
               </button>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TwoFactorModal({ enabled, onClose, onDone }) {
+  const { lang } = useLanguage();
+  const isZh = lang === 'zh';
+  const T = (en, zh) => (isZh ? zh : en);
+  const [setup, setSetup] = useState(null);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (enabled) return;
+    setupTwoFactor()
+      .then(({ data }) => setSetup(data))
+      .catch((e) => setError(e.response?.data?.error || 'Failed'));
+  }, []);
+
+  const confirm = async () => {
+    setError('');
+    if (code.length !== 6) return setError(T('Enter the 6-digit code', '请输入 6 位代码'));
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disableTwoFactor({ code });
+        onDone(false, T('Two-factor authentication disabled', '已禁用两步验证'));
+      } else {
+        await verifyTwoFactor({ code });
+        onDone(true, T('Two-factor authentication enabled', '已启用两步验证'));
+      }
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.error || 'Invalid code');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition text-center text-lg tracking-[0.4em]";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-[min(92vw,400px)] p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-gray-900 mb-1">{T('Two-Factor Authentication', '两步验证')}</h3>
+
+        {enabled ? (
+          <>
+            <p className="text-sm text-gray-500 mb-4">
+              {T('Enter a code from your authenticator app to disable 2FA.', '请输入身份验证器中的代码以禁用两步验证。')}
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              className={inputCls}
+              placeholder="••••••"
+              autoFocus
+            />
+            {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
+            <div className="flex justify-end gap-2 pt-4">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                {T('Cancel', '取消')}
+              </button>
+              <button type="button" onClick={confirm} disabled={busy} className="px-4 py-2 text-sm rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition disabled:opacity-60">
+                {busy ? '...' : T('Disable', '禁用')}
+              </button>
+            </div>
+          </>
+        ) : setup ? (
+          <>
+            <p className="text-sm text-gray-500 mb-3">
+              {T('Scan this QR code with your authenticator app (e.g. Google Authenticator), then enter the 6-digit code below.', '请使用身份验证器应用（如 Google Authenticator）扫描此二维码，然后在下方输入 6 位代码。')}
+            </p>
+            <div className="flex justify-center mb-3">
+              <img src={setup.qr} alt="QR" className="w-44 h-44 border border-gray-200 rounded-xl" />
+            </div>
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 mb-3">
+              <span className="text-xs text-gray-500 font-mono truncate mr-2">{setup.secret}</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard?.writeText(setup.secret);
+                  onDone(enabled, T('Secret copied', '密钥已复制'));
+                }}
+                className="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition shrink-0"
+              >
+                {T('Copy', '复制')}
+              </button>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              className={inputCls}
+              placeholder="••••••"
+              autoFocus
+            />
+            {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
+            <div className="flex justify-end gap-2 pt-4">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                {T('Cancel', '取消')}
+              </button>
+              <button type="button" onClick={confirm} disabled={busy} className="px-4 py-2 text-sm rounded-lg bg-[#1a73e8] hover:bg-[#1765cc] text-white font-medium transition disabled:opacity-60">
+                {busy ? '...' : T('Verify & Enable', '验证并启用')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-gray-500 py-6 text-center">{T('Loading...', '加载中...')}</p>
         )}
       </div>
     </div>
