@@ -48,6 +48,7 @@ async function seed() {
     ['number_expiry', true, { graceDays: 7 }], ['maintenance_mode', false, {}], ['admin_alerts', true, {}],
     ['bulk_blast', true, {}], ['ai_features', true, {}], ['user_api', true, {}],
     ['sms_scheduling', true, {}], ['mm_support', false, {}], ['kyc_required', false, {}],
+    ['self_assign', true, {}],
   ];
 
   for (const [key, enabled, cfg] of toggles) {

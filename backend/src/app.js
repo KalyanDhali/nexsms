@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.js';
 import providerRoutes from './routes/providers.js';
 import webhookRoutes from './routes/webhooks.js';
 import messageRoutes from './routes/messages.js';
+import numberRoutes from './routes/numbers.js';
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/numbers', numberRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
 // Public settings (theme, site name) for the frontend

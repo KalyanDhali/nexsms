@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
+import NumbersPanel from '../components/NumbersPanel.jsx';
 
 const mockThreads = [
   {
@@ -49,6 +50,7 @@ export default function DashboardPage() {
   const [threads, setThreads] = useState(mockThreads);
   const [activeThread, setActiveThread] = useState(mockThreads[0].id);
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('messages');
 
   const active = threads.find((th) => th.id === activeThread);
 
@@ -93,32 +95,53 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <ConversationList
-          threads={filtered}
-          activeId={activeThread}
-          onSelect={setActiveThread}
-          search={search}
-          onSearch={setSearch}
-          onNew={() => setActiveThread(null)}
-        />
-        <ConversationView
-          thread={active}
-          onSend={sendMessage}
-          onStartNew={(contact) => {
-            const newThread = {
-              id: Date.now(),
-              name: contact,
-              preview: 'No messages yet',
-              time: 'Now',
-              unread: 0,
-              messages: [],
-            };
-            setThreads((prev) => [newThread, ...prev]);
-            setActiveThread(newThread.id);
-          }}
-        />
+      <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white">
+        {['messages', 'numbers'].map((key) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition relative ${
+              tab === key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {key === 'messages' ? (t('nav.login') === 'Sign in' ? 'Messages' : '消息') : (t('nav.login') === 'Sign in' ? 'Numbers' : '号码')}
+            {tab === key && (
+              <span className="absolute -bottom-[11px] left-3 right-3 h-0.5 rounded-full" style={{ background: theme.primary }} />
+            )}
+          </button>
+        ))}
       </div>
+
+      {tab === 'messages' ? (
+        <div className="flex flex-1 overflow-hidden">
+          <ConversationList
+            threads={filtered}
+            activeId={activeThread}
+            onSelect={setActiveThread}
+            search={search}
+            onSearch={setSearch}
+            onNew={() => setActiveThread(null)}
+          />
+          <ConversationView
+            thread={active}
+            onSend={sendMessage}
+            onStartNew={(contact) => {
+              const newThread = {
+                id: Date.now(),
+                name: contact,
+                preview: 'No messages yet',
+                time: 'Now',
+                unread: 0,
+                messages: [],
+              };
+              setThreads((prev) => [newThread, ...prev]);
+              setActiveThread(newThread.id);
+            }}
+          />
+        </div>
+      ) : (
+        <NumbersPanel />
+      )}
     </div>
   );
 }

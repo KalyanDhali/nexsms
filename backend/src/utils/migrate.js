@@ -56,7 +56,8 @@ const migrations = [
     compliance_status TEXT NOT NULL DEFAULT 'not_registered',
     monthly_cost NUMERIC(14,4) NOT NULL DEFAULT 0,
     expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
   `CREATE TABLE IF NOT EXISTS conversations (

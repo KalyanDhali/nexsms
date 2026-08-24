@@ -36,3 +36,7 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+export const getMyNumbers = () => api.get('/numbers/mine');
+export const setPrimaryNumber = (id) => api.patch(`/numbers/${id}/primary`);
+export const getAvailableNumbers = (params) => api.get('/numbers/available', { params });
