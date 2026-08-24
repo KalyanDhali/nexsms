@@ -1,4 +1,5 @@
 import { useLanguage } from '../../context/LanguageContext.jsx';
+import Avatar from './Avatar.jsx';
 
 const CALL_LOG = [
   { id: 1, name: '+1 (702) 246-7591', dir: 'in', time: '9:15 PM' },
@@ -24,8 +25,11 @@ export default function CallsPanel({ onPick }) {
             onClick={() => onPick(c.name)}
             className="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition"
           >
-            <span className="w-10 h-10 shrink-0 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center">
-              {c.dir === 'in' ? '↓' : c.dir === 'out' ? '↑' : '✕'}
+            <span className="relative shrink-0">
+              <Avatar name={c.name} size={40} />
+              <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] flex items-center justify-center text-white ${c.dir === 'in' ? 'bg-green-500' : c.dir === 'out' ? 'bg-blue-500' : 'bg-rose-500'}`}>
+                {c.dir === 'in' ? '↓' : c.dir === 'out' ? '↑' : '✕'}
+              </span>
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-medium text-sm text-slate-900 truncate">{c.name}</span>

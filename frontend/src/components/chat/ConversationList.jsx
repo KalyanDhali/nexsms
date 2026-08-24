@@ -1,12 +1,5 @@
 import { useLanguage } from '../../context/LanguageContext.jsx';
-
-const AVATAR_COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500', 'bg-cyan-600'];
-
-function initials(name) {
-  const digits = (name.match(/\d/g) || []).slice(-4).join('');
-  if (digits) return digits;
-  return name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '?';
-}
+import Avatar from './Avatar.jsx';
 
 export default function ConversationList({ threads, activeId, onSelect, onNew }) {
   const { lang } = useLanguage();
@@ -24,7 +17,7 @@ export default function ConversationList({ threads, activeId, onSelect, onNew })
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {threads.map((thread, idx) => (
+        {threads.map((thread) => (
           <button
             key={thread.id}
             onClick={() => onSelect(thread.id)}
@@ -32,11 +25,7 @@ export default function ConversationList({ threads, activeId, onSelect, onNew })
               thread.id === activeId ? 'bg-blue-50/70' : 'hover:bg-slate-50'
             }`}
           >
-            <span
-              className={`w-10 h-10 shrink-0 rounded-full ${AVATAR_COLORS[idx % AVATAR_COLORS.length]} text-white text-xs font-semibold flex items-center justify-center`}
-            >
-              {initials(thread.name)}
-            </span>
+            <Avatar name={thread.name} src={thread.avatar} size={40} />
             <span className="min-w-0 flex-1">
               <span className="flex items-center justify-between gap-2">
                 <span className="font-medium text-sm text-slate-900 truncate">{thread.name}</span>

@@ -1,4 +1,5 @@
 import { useLanguage } from '../../context/LanguageContext.jsx';
+import Avatar from './Avatar.jsx';
 
 const KEYS = [
   ['1', ''],
@@ -81,10 +82,13 @@ export default function KeypadPanel({
           <button
             key={m.id}
             onClick={() => onSelectMatch(m.id)}
-            className="w-full text-left px-2 py-2 rounded-lg hover:bg-slate-50 transition"
+            className="w-full text-left px-2 py-2 rounded-lg hover:bg-slate-50 transition flex items-center gap-2.5"
           >
-            <span className="font-medium text-slate-800 text-sm block truncate">{m.name}</span>
-            <span className="text-xs text-slate-400 block truncate">{m.preview}</span>
+            <Avatar name={m.name} src={m.avatar} size={34} />
+            <span className="min-w-0">
+              <span className="font-medium text-slate-800 text-sm block truncate">{m.name}</span>
+              <span className="text-xs text-slate-400 block truncate">{m.preview}</span>
+            </span>
           </button>
         ))}
         {matches.length === 0 && input.trim() && /^[0-9+()\s-]{7,}$/.test(input.trim()) && (

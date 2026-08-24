@@ -31,6 +31,7 @@ const mockThreads = [
   {
     id: 2,
     name: '(920) 246-7591',
+    avatar: 'https://i.pravatar.cc/100?img=32',
     preview: "Good morning, David! I'm Victoria, the lead at Vanker Finance. Ou...",
     time: '9:32 PM',
     unread: 0,
@@ -54,6 +55,7 @@ const mockThreads = [
   {
     id: 4,
     name: '(920) 246-7592',
+    avatar: 'https://i.pravatar.cc/100?img=47',
     preview: 'Great, talk soon!',
     time: '6:05 PM',
     unread: 0,
