@@ -19,12 +19,6 @@ function hashColor(name) {
   return h;
 }
 
-function initials(name) {
-  const d = (name.match(/\d/g) || []).slice(-4).join('');
-  if (d) return d;
-  return name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '?';
-}
-
 export default function Avatar({ name, src, size = 40, className = '' }) {
   const color = useMemo(() => PALETTE[hashColor(name) % PALETTE.length], [name]);
 
@@ -41,10 +35,8 @@ export default function Avatar({ name, src, size = 40, className = '' }) {
 
   return (
     <span
-      className={`shrink-0 rounded-full ${color} text-white inline-flex items-center justify-center font-semibold ${className}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.32) }}
-    >
-      {initials(name)}
-    </span>
+      className={`shrink-0 rounded-full ${color} inline-flex items-center justify-center ${className}`}
+      style={{ width: size, height: size }}
+    />
   );
 }
