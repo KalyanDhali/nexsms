@@ -14,6 +14,9 @@ import adminRoutes from './routes/admin.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import apiV1Routes from './routes/apiV1.js';
 import kycRoutes from './routes/kyc.js';
+import templateRoutes from './routes/templates.js';
+import aiRoutes from './routes/ai.js';
+import userWebhookRoutes from './routes/userWebhooks.js';
 
 const app = express();
 app.set('trust proxy', true);
@@ -46,6 +49,9 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/v1', apiV1Routes);
 app.use('/api/kyc', kycRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/user-webhooks', userWebhookRoutes);
 
 // Public landing-page stats
 app.get('/api/public/stats', async (req, res) => {

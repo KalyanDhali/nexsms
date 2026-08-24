@@ -3,30 +3,40 @@ import { getProviderAdapter, getActiveProviders, getFailoverChain } from '../ada
 
 /**
  * Send an SMS with automatic provider failover.
- * Tries providers by priority; if a provider throws, logs it and
- * moves to the next one. Returns the first successful result.
+ * Prefers providers configured for the destination country (when they
+ * declare supported_countries); otherwise falls back to priority order.
+ * Tries providers by priority; if a provider throws, logs it and moves
+ * to the next one. Returns the first successful result.
  */
-export async function sendSmsWithFailover({ from, to, body, countryCode }) {
+export async function sendSmsWithFailover({ from, to, body, countryCode, mediaUrl }) {
   const providers = await getActiveProviders();
   if (!providers.length) {
     throw new Error('No active SMS providers configured');
   }
 
+  // International routing: providers that declare support for this
+  // country are tried first (kept in priority order), others after.
+  const country = countryCode?.toUpperCase();
+  let ordered = providers.filter((p) => p.health !== 'down');
+  if (country) {
+    const supporting = ordered.filter((p) => Array.isArray(p.supported_countries) && p.supported_countries.includes(country));
+    const rest = ordered.filter((p) => !supporting.includes(p));
+    ordered = [...supporting, ...rest];
+  }
+
   let lastError = null;
   let tried = [];
 
-  for (const providerRow of providers) {
-    if (providerRow.health === 'down') continue;
+  for (const providerRow of ordered) {
     try {
       const adapter = await getProviderAdapter(providerRow);
-      const result = await adapter.sendSms({ from, to, body });
+      const result = await adapter.sendSms({ from, to, body, mediaUrl });
       await markProviderHealth(providerRow.id, 'ok');
       return { ...result, providerId: providerRow.id, providerName: providerRow.name, tried };
     } catch (err) {
       lastError = err;
       tried.push({ providerId: providerRow.id, name: providerRow.name, error: err.message });
       console.error(`[SMS] provider ${providerRow.name} failed:`, err.message);
-      // Mark health as degraded after repeated failures handled by caller
     }
   }
 

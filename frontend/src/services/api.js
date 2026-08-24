@@ -99,3 +99,36 @@ export const rejectFraudOrder = (id) => api.post(`/admin/fraud/orders/${id}/reje
 export const getBlocklist = () => api.get('/admin/fraud/blocklist');
 export const addBlocklist = (payload) => api.post('/admin/fraud/blocklist', payload);
 export const removeBlocklist = (ip) => api.delete(`/admin/fraud/blocklist/${ip}`);
+
+export const getTemplates = () => api.get('/templates');
+export const createTemplate = (payload) => api.post('/templates', payload);
+export const updateTemplate = (id, payload) => api.put(`/templates/${id}`, payload);
+export const deleteTemplate = (id) => api.delete(`/templates/${id}`);
+export const adminGetTemplates = () => api.get('/templates/all');
+
+export const getUserWebhooks = () => api.get('/user-webhooks');
+export const createUserWebhook = (payload) => api.post('/user-webhooks', payload);
+export const updateUserWebhook = (id, payload) => api.put(`/user-webhooks/${id}`, payload);
+export const deleteUserWebhook = (id) => api.delete(`/user-webhooks/${id}`);
+
+export const getAiRules = () => api.get('/ai/rules');
+export const createAiRule = (payload) => api.post('/ai/rules', payload);
+export const updateAiRule = (id, payload) => api.put(`/ai/rules/${id}`, payload);
+export const deleteAiRule = (id) => api.delete(`/ai/rules/${id}`);
+export const getAiSuggestions = (text) => api.get('/ai/suggestions', { params: { text } });
+
+export const getConversations = () => api.get('/messages/conversations');
+export const getConversationMessages = (id) => api.get(`/messages/conversations/${id}/messages`);
+export const getScheduledMessages = () => api.get('/messages/scheduled');
+export const cancelScheduledMessage = (id) => api.post(`/messages/scheduled/${id}/cancel`);
+export const createConversation = (payload) => api.post('/messages/conversations', payload);
+export const sendSms = (payload) => api.post('/messages/send', payload);
+export const getUserAnalytics = () => api.get('/messages/analytics');
+export const sendBlast = (payload) => api.post('/messages/blast', payload);
+
+export const getAdminAnalytics = () => api.get('/admin/analytics');
+export const getAdminApiKeys = () => api.get('/admin/keys');
+export const revokeAdminApiKey = (id) => api.post(`/admin/keys/${id}/revoke`);
+export const getAdminWhitelist = () => api.get('/admin/whitelist');
+export const addAdminWhitelist = (payload) => api.post('/admin/whitelist', payload);
+export const removeAdminWhitelist = (ip) => api.delete(`/admin/whitelist/${ip}`);

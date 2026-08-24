@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getApiKeys, createApiKey, revokeApiKey } from '../services/api.js';
+import WebhooksSection from './WebhooksSection.jsx';
 
 export default function ApiKeysPanel() {
   const { theme } = useTheme();
@@ -158,6 +159,8 @@ export default function ApiKeysPanel() {
             </table>
           )}
         </div>
+
+        <WebhooksSection />
 
         {/* Docs */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">

@@ -8,6 +8,7 @@ import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
 import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
 import AccountPanel from '../components/AccountPanel.jsx';
+import BlastModal from '../components/BlastModal.jsx';
 
 const mockThreads = [
   {
@@ -54,17 +55,18 @@ export default function DashboardPage() {
   const [activeThread, setActiveThread] = useState(mockThreads[0].id);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('messages');
+  const [blastOpen, setBlastOpen] = useState(false);
 
   const active = threads.find((th) => th.id === activeThread);
 
-  const sendMessage = (body) => {
+  const sendMessage = (body, mediaUrl = null) => {
     if (!body.trim()) return;
     setThreads((prev) =>
       prev.map((th) =>
         th.id === activeThread
           ? {
               ...th,
-              messages: [...th.messages, { id: Date.now(), direction: 'out', body, time: 'Now', status: 'sent' }],
+              messages: [...th.messages, { id: Date.now(), direction: 'out', body, mediaUrl, time: 'Now', status: 'sent' }],
               preview: body,
             }
           : th
@@ -125,6 +127,14 @@ export default function DashboardPage() {
             )}
           </button>
         ))}
+        {tab === 'messages' && (
+          <button
+            onClick={() => setBlastOpen(true)}
+            className="ml-auto px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
+          >
+            {t('nav.login') === 'Sign in' ? 'Bulk blast' : '批量群发'}
+          </button>
+        )}
       </div>
 
       {tab === 'messages' ? (
@@ -163,6 +173,8 @@ export default function DashboardPage() {
       ) : (
         <AccountPanel />
       )}
+
+      {blastOpen && <BlastModal onClose={() => setBlastOpen(false)} />}
     </div>
   );
 }

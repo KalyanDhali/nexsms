@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../models/db.js';
 import { getProviderAdapter } from '../adapters/index.js';
+import { categorizeMessage, findAutoReply } from '../services/aiEngine.js';
+import { fireWebhook } from '../services/webhookDelivery.js';
 
 const router = Router();
 
@@ -75,15 +77,54 @@ async function handleInboundMessage({ providerId, to, from, body, sid }) {
   }
 
   await query(
-    `INSERT INTO messages (conversation_id, direction, body, status, provider_id, message_sid)
-     VALUES ($1, 'in', $2, 'received', $3, $4)`,
-    [conversationId, body, providerId, sid]
+    `INSERT INTO messages (conversation_id, direction, body, status, provider_id, message_sid, category)
+     VALUES ($1, 'in', $2, 'received', $3, $4, $5)`,
+    [conversationId, body, providerId, sid, categorizeMessage(body)]
   );
 
   await query(
     `UPDATE conversations SET last_message = $2, last_message_at = NOW(), unread_count = unread_count + 1, updated_at = NOW() WHERE id = $1`,
     [conversationId, body]
   );
+
+  // Notify the user's webhook subscribers of the inbound message
+  fireWebhook(number.assigned_user_id, 'inbound', {
+    number: to,
+    from,
+    body,
+    conversationId,
+    messageSid: sid,
+  });
+
+  // Smart auto-reply (config-driven, gated by ai_features toggle)
+  const reply = await findAutoReply(number.assigned_user_id, body);
+  if (reply) {
+    try {
+      const { rows: msg } = await query(
+        `INSERT INTO messages (conversation_id, direction, body, status, cost)
+         SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079)
+         RETURNING id`,
+        [conversationId, reply]
+      );
+      const { sendNow } = await import('../services/messageService.js');
+      await sendNow({
+        userId: number.assigned_user_id,
+        numberId: number.id,
+        conversationId,
+        contactNumber: from,
+        body: reply,
+        messageId: msg[0].id,
+      });
+      console.log(`[auto-reply] replied to ${from}`);
+    } catch (err) {
+      console.error('[auto-reply] failed:', err.message);
+      await query(
+        `UPDATE messages SET status = 'failed', error = $2
+         WHERE conversation_id = $1 AND direction = 'out' AND status = 'pending'`,
+        [conversationId, err.message]
+      );
+    }
+  }
 }
 
 async function handleStatusUpdate({ sid, status, error }) {
@@ -96,12 +137,21 @@ async function handleStatusUpdate({ sid, status, error }) {
     undelivered: 'failed',
   };
   const mapped = statusMap[status] || status;
-  await query(
-    `UPDATE messages SET status = $2, delivered_at = CASE WHEN $2 = 'delivered' THEN NOW() ELSE delivered_at END, error = $3 WHERE message_sid = $1`,
+  const { rows: updated } = await query(
+    `UPDATE messages SET status = $2, delivered_at = CASE WHEN $2 = 'delivered' THEN NOW() ELSE delivered_at END, error = $3 WHERE message_sid = $1 RETURNING id, conversation_id`,
     [sid, mapped, error || null]
   );
   if (mapped === 'delivered') {
     // mark conversation as no longer unread for outbound delivered (optional future)
+  }
+  if (updated.length) {
+    const { rows: conv } = await query(
+      `SELECT user_id FROM conversations WHERE id = $1`,
+      [updated[0].conversation_id]
+    );
+    if (conv.length) {
+      fireWebhook(conv[0].user_id, mapped, { sid, messageId: updated[0].id, status: mapped, error: error || null });
+    }
   }
 }
 

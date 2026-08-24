@@ -39,6 +39,40 @@ export async function listBlocklist() {
 }
 
 /**
+ * Admin IP whitelist — when enabled, only listed IPs may reach the
+ * admin panel. Gated by the 'admin_ip_whitelist' feature toggle.
+ */
+export async function isIpWhitelisted(ip) {
+  if (!ip) return false;
+  const { rows: toggle } = await query(
+    `SELECT enabled FROM feature_toggles WHERE key = 'admin_ip_whitelist'`
+  );
+  const enabled = toggle.length ? toggle[0].enabled : false;
+  if (!enabled) return true; // whitelist off -> everyone allowed
+
+  const { rows } = await query('SELECT 1 FROM admin_ip_whitelist WHERE ip = $1', [ip]);
+  return rows.length > 0;
+}
+
+export async function addWhitelistIp(ip, note = null) {
+  await query(
+    `INSERT INTO admin_ip_whitelist (ip, note) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+    [ip, note]
+  );
+}
+
+export async function removeWhitelistIp(ip) {
+  await query('DELETE FROM admin_ip_whitelist WHERE ip = $1', [ip]);
+}
+
+export async function listWhitelist() {
+  const { rows } = await query(
+    `SELECT ip, note, created_at FROM admin_ip_whitelist ORDER BY created_at DESC`
+  );
+  return rows;
+}
+
+/**
  * Record a user's IP on login for risk context.
  */
 export async function recordLoginIp(userId, ip) {

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getKyc, submitKyc, getReferral } from '../services/api.js';
+import TemplatesSection from './TemplatesSection.jsx';
+import AiSection from './AiSection.jsx';
+import AnalyticsSection from './AnalyticsSection.jsx';
 
 export default function AccountPanel() {
   const { theme } = useTheme();
@@ -145,6 +148,15 @@ export default function AccountPanel() {
             </p>
           )}
         </div>
+
+        {/* Analytics */}
+        <AnalyticsSection />
+
+        {/* Templates */}
+        <TemplatesSection />
+
+        {/* AI auto-reply */}
+        <AiSection />
       </div>
     </div>
   );

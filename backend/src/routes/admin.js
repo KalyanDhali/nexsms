@@ -3,11 +3,23 @@ import { query } from '../models/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { hashPassword } from '../utils/password.js';
 import { confirmPaymentOrder, failPaymentOrder } from '../services/billingService.js';
-import { blockIp, unblockIp, listBlocklist } from '../services/ipGuard.js';
+import { blockIp, unblockIp, listBlocklist, isIpWhitelisted, addWhitelistIp, removeWhitelistIp, listWhitelist } from '../services/ipGuard.js';
 
 const router = Router();
 
 router.use(authenticate, authorize('admin'));
+
+// Admin IP whitelist gate (enabled via admin_ip_whitelist toggle)
+router.use(async (req, res, next) => {
+  // Always allow toggle management so the gate itself can be disabled (kill switch)
+  if (req.path.startsWith('/toggles')) return next();
+  const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').replace(/^::ffff:/, '');
+  const allowed = await isIpWhitelisted(ip);
+  if (!allowed) {
+    return res.status(403).json({ error: 'Admin access restricted to whitelisted IPs' });
+  }
+  next();
+});
 
 // Dashboard stats
 router.get('/stats', async (req, res) => {
@@ -193,6 +205,74 @@ router.post('/fraud/blocklist', async (req, res) => {
 
 router.delete('/fraud/blocklist/:ip', async (req, res) => {
   await unblockIp(req.params.ip);
+  res.json({ ok: true });
+});
+
+// Analytics
+router.get('/analytics', async (req, res) => {
+  const [total, providers, daily, topUsers] = await Promise.all([
+    query(
+      `SELECT COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered,
+              COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+              COALESCE(SUM(cost),0)::numeric AS cost
+       FROM messages`
+    ),
+    query(
+      `SELECT p.name, COUNT(m.id)::int AS messages, COALESCE(SUM(m.cost),0)::numeric AS cost
+       FROM messages m JOIN providers p ON p.id = m.provider_id
+       GROUP BY p.name ORDER BY messages DESC`
+    ),
+    query(
+      `SELECT to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS day,
+              COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered
+       FROM messages WHERE created_at >= NOW() - interval '14 days'
+       GROUP BY day ORDER BY day`
+    ),
+    query(
+      `SELECT u.email, COUNT(m.id)::int AS messages, COALESCE(SUM(m.cost),0)::numeric AS cost
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN users u ON u.id = c.user_id
+       GROUP BY u.email ORDER BY messages DESC LIMIT 10`
+    ),
+  ]);
+  res.json({
+    totals: total.rows[0],
+    providers: providers.rows,
+    daily: daily.rows,
+    topUsers: topUsers.rows,
+  });
+});
+
+// Admin: manage user API keys
+router.get('/keys', async (req, res) => {
+  const { rows } = await query(
+    `SELECT k.id, k.name, k.prefix, k.active, k.last_used_at, k.created_at, u.email
+     FROM api_keys k JOIN users u ON u.id = k.user_id ORDER BY k.created_at DESC`
+  );
+  res.json({ keys: rows });
+});
+
+router.post('/keys/:id/revoke', async (req, res) => {
+  const { rows } = await query(`UPDATE api_keys SET active = FALSE WHERE id = $1 RETURNING id`, [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'API key not found' });
+  res.json({ ok: true });
+});
+
+// Admin IP whitelist
+router.get('/whitelist', async (req, res) => {
+  res.json({ whitelist: await listWhitelist() });
+});
+
+router.post('/whitelist', async (req, res) => {
+  const { ip, note } = req.body;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  await addWhitelistIp(ip, note || null);
+  res.json({ ok: true, ip });
+});
+
+router.delete('/whitelist/:ip', async (req, res) => {
+  await removeWhitelistIp(req.params.ip);
   res.json({ ok: true });
 });
 

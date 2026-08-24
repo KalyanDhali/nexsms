@@ -10,7 +10,7 @@ router.use(authenticate, authorize('admin'));
 
 // List all providers (never return raw credentials)
 router.get('/', async (req, res) => {
-  const { rows } = await query('SELECT id, name, type, active, priority, health, country_routing, created_at FROM providers ORDER BY priority ASC');
+  const { rows } = await query('SELECT id, name, type, active, priority, health, country_routing, supported_countries, created_at FROM providers ORDER BY priority ASC');
   res.json({ providers: rows });
 });
 
@@ -28,20 +28,20 @@ router.get('/:id', async (req, res) => {
 
 // Create provider
 router.post('/', async (req, res) => {
-  const { name, type, credentials, priority = 0, country_routing = {} } = req.body;
+  const { name, type, credentials, priority = 0, country_routing = {}, supported_countries = [] } = req.body;
   if (!name || !type) return res.status(400).json({ error: 'name and type required' });
   const { rows } = await query(
-    `INSERT INTO providers (name, type, credentials, priority, country_routing)
-     VALUES ($1, $2, $3::jsonb, $4, $5::jsonb)
+    `INSERT INTO providers (name, type, credentials, priority, country_routing, supported_countries)
+     VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6::jsonb)
      RETURNING id, name, type, active, priority, health`,
-    [name, type, JSON.stringify(credentials || {}), priority, JSON.stringify(country_routing)]
+    [name, type, JSON.stringify(credentials || {}), priority, JSON.stringify(country_routing), JSON.stringify(supported_countries)]
   );
   res.status(201).json({ provider: rows[0] });
 });
 
 // Update provider
 router.put('/:id', async (req, res) => {
-  const { name, type, credentials, active, priority, country_routing } = req.body;
+  const { name, type, credentials, active, priority, country_routing, supported_countries } = req.body;
   const { rows } = await query('SELECT * FROM providers WHERE id = $1', [req.params.id]);
   if (!rows.length) return res.status(404).json({ error: 'Provider not found' });
   const cur = rows[0];
@@ -62,6 +62,7 @@ router.put('/:id', async (req, res) => {
        active = COALESCE($5, active),
        priority = COALESCE($6, priority),
        country_routing = COALESCE($7::jsonb, country_routing),
+       supported_countries = COALESCE($8::jsonb, supported_countries),
        updated_at = NOW()
      WHERE id = $1
      RETURNING id, name, type, active, priority, health`,
@@ -73,6 +74,7 @@ router.put('/:id', async (req, res) => {
       active === undefined ? null : active,
       priority === undefined ? null : priority,
       country_routing === undefined ? null : JSON.stringify(country_routing),
+      supported_countries === undefined ? null : JSON.stringify(supported_countries),
     ]
   );
   res.json({ provider: updated[0] });

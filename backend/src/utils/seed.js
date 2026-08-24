@@ -25,6 +25,21 @@ async function seed() {
     );
   }
 
+  const templates = [
+    ['OTP verification', 'otp', 'Your NexSMS verification code is {{code}}. It expires in 10 minutes.'],
+    ['Welcome', 'welcome', 'Welcome to NexSMS! Your account is ready. Get started at {{url}}.'],
+    ['Payment received', 'payment', 'Thank you! Your payment of {{amount}} has been received.'],
+    ['Appointment reminder', 'reminder', 'Reminder: You have an appointment on {{date}}. Reply C to confirm.'],
+    ['Delivery notification', 'notification', 'Your order has been shipped. Tracking: {{tracking}}.'],
+  ];
+  for (const [name, category, body] of templates) {
+    await query(
+      `INSERT INTO templates (name, category, body, user_id)
+       VALUES ($1,$2,$3,NULL) ON CONFLICT DO NOTHING`,
+      [name, category, body]
+    );
+  }
+
   const settings = [
     ['site_name', JSON.stringify({ value: 'NexSMS' })],
     ['theme', JSON.stringify({ primaryColor: '#4F46E5', secondaryColor: '#7C3AED', font: 'Inter', logo: '' })],
@@ -49,7 +64,7 @@ async function seed() {
     ['number_expiry', true, { graceDays: 7 }], ['maintenance_mode', false, {}], ['admin_alerts', true, {}],
     ['bulk_blast', true, {}], ['ai_features', true, {}], ['user_api', true, {}],
     ['sms_scheduling', true, {}], ['mm_support', false, {}], ['kyc_required', false, {}],
-    ['self_assign', true, {}],
+    ['self_assign', true, {}], ['admin_ip_whitelist', false, {}],
   ];
 
   for (const [key, enabled, cfg] of toggles) {

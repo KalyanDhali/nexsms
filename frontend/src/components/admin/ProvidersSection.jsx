@@ -28,6 +28,7 @@ export default function ProvidersSection() {
     baseUrl: '',
     credentials: '{}',
     active: true,
+    supportedCountries: '',
   };
   const [f, setF] = useState(form);
 
@@ -59,6 +60,7 @@ export default function ProvidersSection() {
       apiKey: p.credentials?.apiKey || '', apiSecret: p.credentials?.apiSecret || '',
       baseUrl: p.credentials?.baseUrl || '',
       credentials: JSON.stringify(p.credentials || {}),
+      supportedCountries: (p.supported_countries || []).join(', '),
     });
   };
 
@@ -75,7 +77,11 @@ export default function ProvidersSection() {
 
   const save = async () => {
     try {
-      const payload = { name: f.name, type: f.type, priority: Number(f.priority), active: f.active, credentials: buildCredentials() };
+      const payload = {
+        name: f.name, type: f.type, priority: Number(f.priority), active: f.active,
+        credentials: buildCredentials(),
+        supported_countries: f.supportedCountries.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
+      };
       if (editing) {
         await updateProvider(editing.id, payload);
         notify(T('Provider updated', '提供商已更新'));
@@ -147,6 +153,9 @@ export default function ProvidersSection() {
             {f.type === 'singlehouse' && (
               <Field label="Base URL"><TextInput value={f.baseUrl} onChange={(e) => setF({ ...f, baseUrl: e.target.value })} placeholder="https://dashboard.singlehouse.com" /></Field>
             )}
+            <Field label={T('Supported countries (comma, e.g. US, CA)', '支持的国家（逗号分隔，如 US, CA）')}>
+              <TextInput value={f.supportedCountries} onChange={(e) => setF({ ...f, supportedCountries: e.target.value })} placeholder="US, CA, GB" />
+            </Field>
             <Field label={T('Active', '启用')}>
               <SelectInput value={f.active} onChange={(e) => setF({ ...f, active: e.target.value === 'true' })}>
                 <option value="true">Yes</option>
@@ -162,12 +171,13 @@ export default function ProvidersSection() {
         </Card>
       ) : null}
 
-      <Table head={[T('Name', '名称'), T('Type', '类型'), T('Priority', '优先级'), T('Health', '状态'), T('Status', '启用状态'), T('Actions', '操作')]}>
+      <Table head={[T('Name', '名称'), T('Type', '类型'), T('Priority', '优先级'), T('Countries', '国家'), T('Health', '状态'), T('Status', '启用状态'), T('Actions', '操作')]}>
         {providers.map((p) => (
           <tr key={p.id}>
             <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
             <td className="px-4 py-3"><code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{p.type}</code></td>
             <td className="px-4 py-3 text-slate-500">{p.priority}</td>
+            <td className="px-4 py-3 text-xs text-slate-500">{(p.supported_countries || []).join(', ') || '—'}</td>
             <td className="px-4 py-3"><Badge color={healthColor[p.health]}>{p.health}</Badge></td>
             <td className="px-4 py-3"><Badge color={statusColor(p.active)}>{p.active ? T('Active', '启用') : T('Off', '禁用')}</Badge></td>
             <td className="px-4 py-3">

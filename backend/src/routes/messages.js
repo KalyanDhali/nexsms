@@ -110,7 +110,7 @@ router.post('/conversations', async (req, res) => {
 
 // Send SMS — supports immediate send or scheduled (scheduledAt in future)
 router.post('/send', async (req, res) => {
-  const { to, fromNumberId, body, scheduledAt } = req.body;
+  const { to, fromNumberId, body, scheduledAt, media_url } = req.body;
   let conversationId = req.body.conversationId;
   let numberId = fromNumberId;
   let contactNumber = to;
@@ -177,10 +177,10 @@ router.post('/send', async (req, res) => {
 
     // Insert message as pending first so it exists for accounting/tracking
     const { rows: msg } = await query(
-      `INSERT INTO messages (conversation_id, direction, body, status, cost)
-       SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079)
+      `INSERT INTO messages (conversation_id, direction, body, status, cost, media_url)
+       SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079), $3
        RETURNING id`,
-      [conversationId, body]
+      [conversationId, body, media_url || null]
     );
 
     const result = await sendNow({
@@ -190,6 +190,7 @@ router.post('/send', async (req, res) => {
       contactNumber,
       body,
       messageId: msg[0].id,
+      mediaUrl: media_url,
     });
 
     res.json(result);
@@ -221,6 +222,103 @@ router.post('/send', async (req, res) => {
     }
     res.status(500).json({ error: err.message || 'Failed to send SMS' });
   }
+});
+
+// User analytics: volume, cost, delivery rate + daily series
+router.get('/analytics', async (req, res) => {
+  const [totals, daily] = await Promise.all([
+    query(
+      `SELECT COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered,
+              COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+              COALESCE(SUM(cost),0)::numeric AS cost
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.user_id = $1`,
+      [req.user.id]
+    ),
+    query(
+      `SELECT to_char(m.created_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS day,
+              COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE m.status IN ('sent','delivered'))::int AS delivered
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.user_id = $1 AND m.created_at >= NOW() - interval '14 days'
+       GROUP BY day ORDER BY day`,
+      [req.user.id]
+    ),
+  ]);
+  res.json({ totals: totals.rows[0], daily: daily.rows });
+});
+
+// Bulk blast — send the same body to many recipients from one number.
+// Gated by bulk_blast toggle; enforces burst + per-number daily limits.
+router.post('/blast', async (req, res) => {
+  const { to, fromNumberId, body, scheduledAt } = req.body;
+
+  const { rows: toggle } = await query(`SELECT enabled FROM feature_toggles WHERE key = 'bulk_blast'`);
+  if (!toggle.length || !toggle[0].enabled) {
+    return res.status(403).json({ error: 'Bulk blast is disabled by admin' });
+  }
+
+  let recipients = Array.isArray(to) ? to : String(to || '').split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+  recipients = [...new Set(recipients)];
+  if (!recipients.length || !body || !body.trim()) {
+    return res.status(400).json({ error: 'Provide a body and at least one recipient' });
+  }
+  if (recipients.length > 100) return res.status(400).json({ error: 'Max 100 recipients per blast' });
+  if (!fromNumberId) return res.status(400).json({ error: 'fromNumberId required' });
+
+  const { rows: numberRows } = await query(
+    'SELECT id, number FROM numbers WHERE id = $1 AND assigned_user_id = $2',
+    [fromNumberId, req.user.id]
+  );
+  if (!numberRows.length) return res.status(400).json({ error: 'Number not assigned to you' });
+
+  // Burst check on first send
+  const burstLimit = await getBurstLimit();
+  const burst = checkBurst(req.user.id, burstLimit);
+  if (!burst.allowed) {
+    return res.status(429).json({ error: 'Too many messages, slow down', retryAfterMs: Math.max(burst.retryAfterMs, 100) });
+  }
+
+  const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+  if (scheduledDate && isNaN(scheduledDate.getTime())) return res.status(400).json({ error: 'Invalid scheduledAt' });
+
+  const results = [];
+  let sent = 0, failed = 0, scheduled = 0;
+
+  for (const contact of recipients) {
+    try {
+      const { rows: conv } = await query(
+        `INSERT INTO conversations (user_id, number_id, contact_number)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, number_id, contact_number) DO UPDATE SET archived = FALSE, updated_at = NOW()
+         RETURNING id`,
+        [req.user.id, numberRows[0].id, contact]
+      );
+      const conversationId = conv[0].id;
+
+      if (scheduledDate) {
+        const messageId = await scheduleMessage({ userId: req.user.id, conversationId, body, scheduledAt: scheduledDate.toISOString() });
+        scheduled++;
+        results.push({ to: contact, status: 'scheduled', messageId });
+      } else {
+        const { rows: msg } = await query(
+          `INSERT INTO messages (conversation_id, direction, body, status, cost)
+           SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079)
+           RETURNING id`,
+          [conversationId, body]
+        );
+        const r = await sendNow({ userId: req.user.id, numberId: numberRows[0].id, conversationId, contactNumber: contact, body, messageId: msg[0].id });
+        sent++;
+        results.push({ to: contact, status: 'sent', messageId: r.messageId });
+      }
+    } catch (err) {
+      failed++;
+      results.push({ to: contact, status: 'failed', error: err.message });
+    }
+  }
+
+  res.status(201).json({ total: recipients.length, sent, scheduled, failed, results });
 });
 
 export default router;

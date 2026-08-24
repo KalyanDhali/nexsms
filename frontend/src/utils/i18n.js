@@ -36,6 +36,7 @@ export const translations = {
       delivered: 'Delivered',
       failed: 'Failed',
       myNumbers: 'My numbers',
+      mediaUrl: 'Media/MMS image URL (optional)',
     },
   },
   zh: {
@@ -75,6 +76,7 @@ export const translations = {
       delivered: '已送达',
       failed: '失败',
       myNumbers: '我的号码',
+      mediaUrl: '媒体/MMS 图片地址（可选）',
     },
   },
 };

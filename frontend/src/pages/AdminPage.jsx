@@ -11,17 +11,23 @@ import PaymentsSection from '../components/admin/PaymentsSection.jsx';
 import FraudSection from '../components/admin/FraudSection.jsx';
 import KycSection from '../components/admin/KycSection.jsx';
 import SettingsSection from '../components/admin/SettingsSection.jsx';
+import AnalyticsSection from '../components/admin/AnalyticsSection.jsx';
+import ApiKeysSection from '../components/admin/ApiKeysSection.jsx';
+import WhitelistSection from '../components/admin/WhitelistSection.jsx';
 
 const SECTIONS = [
-  { key: 'overview', icon: '📊' },
-  { key: 'providers', icon: '🛰️' },
-  { key: 'users', icon: '👥' },
-  { key: 'numbers', icon: '📞' },
-  { key: 'plans', icon: '📦' },
-  { key: 'payments', icon: '💳' },
-  { key: 'fraud', icon: '🛡️' },
-  { key: 'kyc', icon: '🪪' },
-  { key: 'settings', icon: '⚙️' },
+  { key: 'overview', icon: '■' },
+  { key: 'analytics', icon: '≡' },
+  { key: 'providers', icon: '◈' },
+  { key: 'users', icon: '◉' },
+  { key: 'numbers', icon: '☏' },
+  { key: 'plans', icon: '▣' },
+  { key: 'payments', icon: '◈' },
+  { key: 'keys', icon: 'K' },
+  { key: 'whitelist', icon: '◇' },
+  { key: 'fraud', icon: '▲' },
+  { key: 'kyc', icon: '✦' },
+  { key: 'settings', icon: '⚙' },
 ];
 
 export default function AdminPage() {
@@ -34,11 +40,14 @@ export default function AdminPage() {
 
   const names = {
     overview: T('Overview', '概览'),
+    analytics: T('Analytics', '数据分析'),
     providers: T('Providers', '提供商'),
     users: T('Users', '用户'),
     numbers: T('Numbers', '号码'),
     plans: T('Plans', '套餐'),
     payments: T('Payments', '支付'),
+    keys: T('API Keys', 'API 密钥'),
+    whitelist: T('IP Whitelist', 'IP 白名单'),
     fraud: T('Fraud', '防欺诈'),
     kyc: T('KYC', 'KYC'),
     settings: T('Settings', '设置'),
@@ -46,11 +55,14 @@ export default function AdminPage() {
 
   const render = () => {
     switch (section) {
+      case 'analytics': return <AnalyticsSection />;
       case 'providers': return <ProvidersSection />;
       case 'users': return <UsersSection />;
       case 'numbers': return <NumbersSection />;
       case 'plans': return <PlansSection />;
       case 'payments': return <PaymentsSection />;
+      case 'keys': return <ApiKeysSection />;
+      case 'whitelist': return <WhitelistSection />;
       case 'fraud': return <FraudSection />;
       case 'kyc': return <KycSection />;
       case 'settings': return <SettingsSection />;

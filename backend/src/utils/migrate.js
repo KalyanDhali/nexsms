@@ -260,6 +260,34 @@ const migrations = [
     reviewed_at TIMESTAMPTZ,
     reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS user_webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    events JSONB NOT NULL DEFAULT '["delivered"]'::jsonb,
+    secret TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS admin_ip_whitelist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip TEXT UNIQUE NOT NULL,
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `ALTER TABLE messages ADD COLUMN IF NOT EXISTS category TEXT`,
+  `ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT`,
+  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS supported_countries JSONB`,
+  `CREATE TABLE IF NOT EXISTS auto_reply_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    trigger_keyword TEXT NOT NULL,
+    reply TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages (conversation_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_provider_created ON messages (provider_id, created_at)`,
 ];
 
 export async function runMigrations() {

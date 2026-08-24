@@ -1,6 +1,7 @@
 import { query } from '../models/db.js';
 import { sendSmsWithFailover } from './providerService.js';
 import { requireKyc } from './kycService.js';
+import { fireWebhook } from './webhookDelivery.js';
 
 /**
  * Shared messaging core — used by the send route and the scheduler
@@ -50,6 +51,24 @@ export function getToday() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const DIAL_COUNTRY = {
+  '1': 'US', '44': 'GB', '86': 'CN', '91': 'IN', '81': 'JP', '82': 'KR',
+  '61': 'AU', '49': 'DE', '33': 'FR', '34': 'ES', '55': 'BR', '52': 'MX',
+  '7': 'RU', '971': 'AE', '65': 'SG', '60': 'MY', '62': 'ID', '66': 'TH',
+  '84': 'VN', '234': 'NG', '27': 'ZA', '39': 'IT', '31': 'NL', '48': 'PL',
+  '351': 'PT', '90': 'TR', '972': 'IL', '966': 'SA', '92': 'PK', '880': 'BD',
+};
+
+function deriveCountry(e164) {
+  if (!e164 || !e164.startsWith('+')) return null;
+  const d = e164.slice(1);
+  for (const len of [3, 2, 1]) {
+    const prefix = d.slice(0, len);
+    if (DIAL_COUNTRY[prefix]) return DIAL_COUNTRY[prefix];
+  }
+  return null;
+}
+
 export async function getDailyUsage(numberId, date = getToday()) {
   const { rows } = await query(
     'SELECT count FROM daily_limits WHERE number_id = $1 AND send_date = $2',
@@ -92,7 +111,7 @@ export async function getActiveSubscription(userId) {
  * insufficient balance, provider failure) — caller decides how to
  * surface them.
  */
-export async function sendNow({ userId, numberId, conversationId, contactNumber, body, messageId }) {
+export async function sendNow({ userId, numberId, conversationId, contactNumber, body, messageId, mediaUrl }) {
   const { rows: numberRows } = await query('SELECT * FROM numbers WHERE id = $1', [numberId]);
   const number = numberRows[0];
   if (!number) throw new Error('Number not found');
@@ -158,8 +177,9 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
     throw err;
   }
 
-  // Send via provider with failover
-  const result = await sendSmsWithFailover({ from: number.number, to: contactNumber, body });
+  // Send via provider with failover (country-aware routing when derivable)
+  const countryCode = deriveCountry(contactNumber);
+  const result = await sendSmsWithFailover({ from: number.number, to: contactNumber, body, mediaUrl, countryCode });
 
   // Update message + conversation
   await query(
@@ -178,6 +198,8 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
     await deductBalance(userId, cost, messageId);
   }
   await incrementDailyCount(numberId);
+
+  fireWebhook(userId, 'sent', { messageId, sid: result.sid, from: number.number, to: contactNumber, status: 'sent', cost, payFrom });
 
   return { messageId, sid: result.sid, providerName: result.providerName, cost, status: 'sent', tried: result.tried, payFrom };
 }
