@@ -20,7 +20,7 @@ export default function ConversationView({
   const T = (en, zh) => (isZh ? zh : en);
   const [draft, setDraft] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [attachMenu, setAttachMenu] = useState('closed');
   const [templates, setTemplates] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -117,7 +117,7 @@ export default function ConversationView({
   const removeRecipient = (num) => setRecipients((r) => r.filter((x) => x !== num));
 
   const composerBar = (onSubmit, canSend) => (
-    <form onSubmit={onSubmit} className="px-4 pt-3 pb-1 border-t border-slate-200 bg-white">
+    <form onSubmit={onSubmit} className="border-t border-gray-200 p-3 bg-white">
       {mediaUrl && (
         <div className="mb-2 flex items-center gap-2">
           <div className="relative shrink-0">
@@ -139,65 +139,97 @@ export default function ConversationView({
         </div>
       )}
       {uploadError && <div className="mb-2 text-xs text-red-500">{uploadError}</div>}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <div className="relative">
           <button
             type="button"
-            onClick={() => setShowTemplates((v) => !v)}
-            className="h-10 px-3 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 text-sm transition"
-            title="Templates"
+            onClick={() => setAttachMenu((v) => (v === 'closed' ? 'main' : 'closed'))}
+            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition"
+            title={T('Attach', '添加附件')}
           >
-            ▤
+            {uploading ? <span className="text-sm">…</span> : <span className="text-2xl leading-none text-gray-400">+</span>}
           </button>
-          {showTemplates && (
-            <div className="absolute bottom-12 left-0 w-72 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1">
-              {templates.length === 0 && <div className="px-4 py-2 text-sm text-slate-400">No templates</div>}
-              {templates.map((tmpl) => (
-                <button
-                  key={tmpl.id}
-                  type="button"
-                  onClick={() => {
-                    setDraft(tmpl.body);
-                    setShowTemplates(false);
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm"
-                >
-                  <span className="font-medium text-slate-800">{tmpl.name}</span>
-                  <span className="block text-xs text-slate-400 truncate">{tmpl.body}</span>
-                </button>
-              ))}
+          {attachMenu !== 'closed' && (
+            <div className="absolute bottom-12 left-0 w-52 bg-white rounded-lg shadow-md border border-gray-100 py-1 z-20">
+              {attachMenu === 'main' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      setAttachMenu('closed');
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition"
+                  >
+                    {T('Photos', '照片')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttachMenu('templates')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 transition"
+                  >
+                    {T('Templates', '模板')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-1.5 text-[11px] text-gray-400 uppercase tracking-wide">{T('Templates', '模板')}</div>
+                  {templates.length === 0 && <div className="px-4 py-2 text-sm text-gray-400">{T('No templates', '暂无模板')}</div>}
+                  {templates.map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      type="button"
+                      onClick={() => {
+                        setDraft(tmpl.body);
+                        setAttachMenu('closed');
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
+                    >
+                      <span className="font-medium text-gray-800 block">{tmpl.name}</span>
+                      <span className="text-xs text-gray-400 truncate block">{tmpl.body}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setAttachMenu('main')}
+                    className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-50 transition"
+                  >
+                    ← {T('Back', '返回')}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className={`h-10 px-3 rounded-xl border text-sm transition ${uploading ? 'opacity-50' : 'text-slate-500 hover:bg-slate-50'}`}
-          title="Attach image (MMS)"
-        >
-          {uploading ? '…' : '▣'}
-        </button>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={t('chat.typeMessage')}
-          className="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 focus:bg-white border border-transparent focus:border-primary text-sm outline-none transition"
-        />
+
+        <div className="flex-1 flex items-center bg-[#f1f3f4] rounded-full px-5 py-2 border border-transparent focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500 transition">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={t('chat.typeMessage')}
+            className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
+          />
+        </div>
+
         <button
           type="submit"
           disabled={!canSend || !draft.trim()}
-          className="w-10 h-10 rounded-xl bg-gradient-to-r from-primary to-secondary text-white flex items-center justify-center disabled:opacity-40 hover:opacity-90 transition"
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
+            canSend && draft.trim() ? 'bg-[#1a73e8] text-white hover:bg-[#1765cc]' : 'bg-gray-100 text-gray-400'
+          }`}
         >
-          ➤
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
         </button>
       </div>
     </form>
   );
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
+    <div className="flex-1 flex flex-col bg-white min-w-0">
       {!thread && composing ? (
         <div ref={composerRef} className="flex-1 flex flex-col min-h-0 bg-white">
           <div className="relative border-t border-b border-gray-200 px-4 py-3 flex items-center flex-wrap">
@@ -205,13 +237,13 @@ export default function ConversationView({
             {recipients.map((r) => (
               <span
                 key={r}
-                className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full pl-2.5 pr-1.5 py-1 text-sm mr-1.5"
+                className="flex items-center gap-1.5 bg-[#e8f0fe] text-[#1a73e8] border border-[#d2e3fc] rounded-full px-3 py-1 text-sm mr-1.5"
               >
                 {r}
                 <button
                   type="button"
                   onClick={() => removeRecipient(r)}
-                  className="w-4 h-4 rounded-full hover:bg-blue-100 text-blue-400 hover:text-blue-600 flex items-center justify-center leading-none"
+                  className="w-4 h-4 rounded-full hover:bg-blue-100 text-[#1a73e8] opacity-70 hover:opacity-100 flex items-center justify-center leading-none"
                 >
                   ×
                 </button>
@@ -246,7 +278,7 @@ export default function ConversationView({
             )}
           </div>
 
-          <div className="px-4 pt-1.5 text-xs text-slate-400">
+          <div className="border-b border-gray-200 text-xs text-gray-500 py-1.5 px-4">
             {recipients.length >= MAX_RECIPIENTS
               ? T('Maximum 5 recipients', '最多 5 个收件人')
               : t('chat.addRecipients')}
