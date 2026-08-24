@@ -186,7 +186,7 @@ router.get('/mine', async (req, res) => {
        (SELECT COUNT(*)::int FROM conversations c WHERE c.number_id = n.id) AS conversation_count
      FROM numbers n
      LEFT JOIN providers p ON p.id = n.provider_id
-     WHERE n.assigned_user_id = $1 AND n.status = 'assigned'
+     WHERE n.assigned_user_id = $1
      ORDER BY n.primary_number DESC, n.created_at ASC`,
     [req.user.id]
   );
