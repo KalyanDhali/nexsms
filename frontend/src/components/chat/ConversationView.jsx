@@ -119,23 +119,18 @@ export default function ConversationView({
   const composerBar = (onSubmit, canSend) => (
     <form onSubmit={onSubmit} className="border-t border-gray-200 p-3 bg-white">
       {mediaUrl && (
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex items-center">
           <div className="relative shrink-0">
-            <img src={mediaUrl} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+            <img src={mediaUrl} alt="" className="w-20 h-20 rounded-lg border border-gray-200 object-cover shadow-sm" />
             <button
               type="button"
               onClick={() => setMediaUrl('')}
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center leading-none"
+              className="absolute -top-2 -right-2 bg-gray-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer z-10 leading-none"
+              title={T('Remove', '移除')}
             >
               ×
             </button>
           </div>
-          <input
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder={t('chat.mediaUrl')}
-            className="flex-1 px-4 py-2 rounded-xl bg-slate-100 focus:bg-white border border-transparent focus:border-primary text-sm outline-none transition"
-          />
         </div>
       )}
       {uploadError && <div className="mb-2 text-xs text-red-500">{uploadError}</div>}
