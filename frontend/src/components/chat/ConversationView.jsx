@@ -2,7 +2,18 @@ import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { getTemplates, uploadSmsImage, getMyNumbers } from '../../services/api.js';
 
-export default function ConversationView({ thread, onSend, onStartNew, dialInput, onDialChange, fromNumber }) {
+export default function ConversationView({
+  thread,
+  onSend,
+  onStartNew,
+  onPickContact,
+  contacts,
+  dialInput,
+  onDialChange,
+  fromNumber,
+  composing,
+  onCloseComposer,
+}) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
@@ -15,10 +26,37 @@ export default function ConversationView({ thread, onSend, onStartNew, dialInput
   const [numbers, setNumbers] = useState([]);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
+  const composerRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [thread?.messages?.length]);
+
+  useEffect(() => {
+    if (!composing) return;
+    const handler = (e) => {
+      if (composerRef.current && !composerRef.current.contains(e.target)) {
+        onCloseComposer();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [composing, onCloseComposer]);
+
+  const contactOptions = dialInput.trim()
+    ? contacts.filter(
+        (th) =>
+          th.name.toLowerCase().includes(dialInput.toLowerCase()) ||
+          th.preview.toLowerCase().includes(dialInput.toLowerCase())
+      )
+    : contacts;
+  const digits = (s) => (s || '').replace(/[^0-9]/g, '');
+  const fullNumber = /^[0-9+()\s-]{7,}$/.test(dialInput.trim()) && !contactOptions.some((th) => digits(th.name) === digits(dialInput));
+  const avatarColor = (i) => ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500', 'bg-cyan-600'][i % 6];
+  const contactInitials = (name) => {
+    const d = (name.match(/\d/g) || []).slice(-4).join('');
+    return d || name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '?';
+  };
 
   useEffect(() => {
     getTemplates().then(({ data }) => setTemplates(data.templates)).catch(() => {});
@@ -62,18 +100,10 @@ export default function ConversationView({ thread, onSend, onStartNew, dialInput
     }
   };
 
-  const startNew = (e) => {
-    e.preventDefault();
-    if (dialInput.trim()) {
-      onStartNew(dialInput.trim());
-      onDialChange('');
-    }
-  };
-
   return (
     <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
-      {!thread ? (
-        <form onSubmit={startNew} className="flex-1 flex flex-col min-h-0">
+      {!thread && composing ? (
+        <div ref={composerRef} className="flex-1 flex flex-col min-h-0">
           <div className="px-5 py-3.5 border-b border-slate-200 bg-white">
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500 shrink-0">{t('chat.to')}:</span>
@@ -84,20 +114,47 @@ export default function ConversationView({ thread, onSend, onStartNew, dialInput
                 placeholder={T('Type a name or phone number', '输入姓名或电话号码')}
                 className="flex-1 px-3 py-2 rounded-xl border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm outline-none transition"
               />
-              <button
-                type="submit"
-                disabled={!dialInput.trim()}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold disabled:opacity-40"
-              >
-                {t('chat.start')}
-              </button>
             </div>
             <div className="mt-1.5 text-xs text-slate-400">{t('chat.addRecipients')}</div>
           </div>
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-            {t('chat.noContacts')}
+          <div className="flex-1 overflow-y-auto py-1">
+            {contactOptions.map((th, i) => (
+              <button
+                key={th.id}
+                onClick={() => onPickContact(th.name)}
+                className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-100 transition text-left"
+              >
+                <span className={`w-9 h-9 shrink-0 rounded-full ${avatarColor(i)} text-white text-[11px] font-semibold flex items-center justify-center`}>
+                  {contactInitials(th.name)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-slate-800 truncate">{th.name}</span>
+                  <span className="block text-xs text-slate-400 truncate">
+                    {th.lastDirection === 'out' ? `You: ${th.preview}` : th.preview}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {fullNumber && (
+              <button
+                onClick={() => onPickContact(dialInput.trim())}
+                className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-100 transition text-left"
+              >
+                <span className="w-9 h-9 shrink-0 rounded-full bg-blue-50 text-blue-600 text-base font-semibold flex items-center justify-center">+</span>
+                <span className="text-sm text-slate-800">
+                  {T('Send new message to', '发送新消息给')} {dialInput.trim()}
+                </span>
+              </button>
+            )}
+            {contactOptions.length === 0 && !fullNumber && (
+              <div className="text-center text-sm text-slate-400 py-10">{t('chat.noContacts')}</div>
+            )}
           </div>
-        </form>
+        </div>
+      ) : !thread ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
+          {T('Select a conversation to start messaging', '选择一个对话开始发送消息')}
+        </div>
       ) : (
         <>
           <div className="px-5 py-3.5 border-b border-slate-200 bg-white">

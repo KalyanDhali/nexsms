@@ -81,6 +81,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState('messages');
   const [nav, setNav] = useState('messages');
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
 
@@ -123,6 +124,29 @@ export default function DashboardPage() {
     };
     setThreads((prev) => [newThread, ...prev]);
     setActiveThread(newThread.id);
+    setComposing(false);
+    setDialInput('');
+    setSearch('');
+  };
+
+  const pickContact = (name) => {
+    const existing = threads.find((th) => th.name === name);
+    if (existing) {
+      setActiveThread(existing.id);
+    } else {
+      startNewThread(name);
+    }
+    setComposing(false);
+  };
+
+  const selectThread = (id) => {
+    setActiveThread(id);
+    setComposing(false);
+  };
+
+  const openComposer = () => {
+    setActiveThread(null);
+    setComposing(true);
     setDialInput('');
     setSearch('');
   };
@@ -145,15 +169,11 @@ export default function DashboardPage() {
         <ConversationList
           threads={filtered}
           activeId={activeThread}
-          onSelect={setActiveThread}
-          onNew={() => {
-            setActiveThread(null);
-            setDialInput('');
-            setSearch('');
-          }}
+          onSelect={selectThread}
+          onNew={openComposer}
         />
       ) : nav === 'calls' ? (
-        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); setActiveThread(null); }} />
+        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); openComposer(); }} />
       ) : (
         <EmptyListPanel kind={nav} />
       )}
@@ -162,9 +182,13 @@ export default function DashboardPage() {
           thread={active}
           onSend={sendMessage}
           onStartNew={startNewThread}
+          onPickContact={pickContact}
+          contacts={threads}
           dialInput={dialInput}
           onDialChange={setDialInput}
           fromNumber={fromNumber}
+          composing={composing}
+          onCloseComposer={() => setComposing(false)}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center bg-slate-50 text-sm text-slate-400 min-w-0">
@@ -182,7 +206,7 @@ export default function DashboardPage() {
         onKey={onKey}
         onBackspace={onBackspace}
         matches={matches}
-        onSelectMatch={(id) => setActiveThread(id)}
+        onSelectMatch={selectThread}
         onStartNew={() => startNewThread(dialInput.trim())}
         onDial={() => {
           if (dialInput.trim()) setNav('calls');
