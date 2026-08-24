@@ -129,14 +129,41 @@ export default function DashboardPage() {
     setSearch('');
   };
 
-  const pickContact = (name) => {
-    const existing = threads.find((th) => th.name === name);
-    if (existing) {
-      setActiveThread(existing.id);
+  const composeSend = ({ recipients, body, mediaUrl }) => {
+    const msg = { id: Date.now(), direction: 'out', body, mediaUrl, time: 'Now', status: 'sent' };
+    if (recipients.length === 1) {
+      const num = recipients[0];
+      const existing = threads.find((th) => th.name === num);
+      if (existing) {
+        setThreads((prev) =>
+          prev.map((th) =>
+            th.id === existing.id
+              ? { ...th, messages: [...th.messages, msg], preview: body, lastDirection: 'out' }
+              : th
+          )
+        );
+        setActiveThread(existing.id);
+      } else {
+        const nt = { id: Date.now(), name: num, preview: body, time: 'Now', unread: 0, lastDirection: 'out', messages: [msg] };
+        setThreads((prev) => [nt, ...prev]);
+        setActiveThread(nt.id);
+      }
     } else {
-      startNewThread(name);
+      const nt = {
+        id: Date.now(),
+        name: recipients.join(', '),
+        preview: body,
+        time: 'Now',
+        unread: 0,
+        lastDirection: 'out',
+        messages: [msg],
+      };
+      setThreads((prev) => [nt, ...prev]);
+      setActiveThread(nt.id);
     }
     setComposing(false);
+    setDialInput('');
+    setSearch('');
   };
 
   const selectThread = (id) => {
@@ -181,8 +208,7 @@ export default function DashboardPage() {
         <ConversationView
           thread={active}
           onSend={sendMessage}
-          onStartNew={startNewThread}
-          onPickContact={pickContact}
+          onComposeSend={composeSend}
           contacts={threads}
           dialInput={dialInput}
           onDialChange={setDialInput}
