@@ -209,12 +209,12 @@ export default function ConversationView({
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
 
-        <div className="flex-1 flex items-center bg-[#f1f3f4] rounded-full px-5 py-2 border border-transparent focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500 transition">
+        <div className="flex-1 min-w-0 flex items-center bg-[#f1f3f4] rounded-full px-5 py-2 border border-transparent focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500 transition">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={t('chat.typeMessage')}
-            className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
+            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
           />
         </div>
 
