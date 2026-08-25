@@ -12,8 +12,10 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html, body {
   height: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {
@@ -21,6 +23,20 @@ body {
   background: #f8fafc;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-x: none;
+}
+
+#root {
+  height: 100%;
+  max-width: 100%;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 ::-webkit-scrollbar {

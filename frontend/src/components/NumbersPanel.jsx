@@ -81,14 +81,14 @@ export default function NumbersPanel() {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50">
       {toast && (
-        <div className="fixed top-16 right-6 z-50 px-4 py-2 rounded-lg text-white text-sm shadow-lg"
+        <div className="fixed top-16 right-4 left-4 sm:left-auto z-50 px-4 py-2 rounded-lg text-white text-sm shadow-lg text-center"
           style={{ background: theme.primary }}>
           {toast}
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="max-w-4xl mx-auto p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div>
             <h1 className="text-xl font-bold text-slate-900">
               {isZh ? '我的号码' : 'My Numbers'}
@@ -97,17 +97,17 @@ export default function NumbersPanel() {
               {isZh ? '管理您拥有的手机号码' : 'Manage the numbers you own'}
             </p>
           </div>
-          <div className="flex rounded-lg overflow-hidden border border-slate-200">
+          <div className="flex w-full sm:w-auto rounded-lg overflow-hidden border border-slate-200">
             <button
               onClick={() => setTab('mine')}
-              className={`px-4 py-1.5 text-sm font-medium transition ${tab === 'mine' ? 'text-white' : 'text-slate-600 bg-white hover:bg-slate-50'}`}
+              className={`flex-1 sm:flex-none min-h-11 flex items-center justify-center px-4 text-sm font-medium transition ${tab === 'mine' ? 'text-white' : 'text-slate-600 bg-white hover:bg-slate-50'}`}
               style={tab === 'mine' ? { background: theme.primary } : {}}
             >
               {isZh ? '我的号码' : 'Mine'}
             </button>
             <button
               onClick={() => setTab('get')}
-              className={`px-4 py-1.5 text-sm font-medium transition ${tab === 'get' ? 'text-white' : 'text-slate-600 bg-white hover:bg-slate-50'}`}
+              className={`flex-1 sm:flex-none min-h-11 flex items-center justify-center px-4 text-sm font-medium transition ${tab === 'get' ? 'text-white' : 'text-slate-600 bg-white hover:bg-slate-50'}`}
               style={tab === 'get' ? { background: theme.primary } : {}}
             >
               {isZh ? '获取号码' : 'Get a number'}
@@ -136,13 +136,13 @@ export default function NumbersPanel() {
               </div>
             ) : (
               numbers.map((num) => (
-                <div key={num.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">
+                <div key={num.id} className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">
                       {num.geo_country || 'US'}
                     </div>
-                    <div>
-                      <div className="font-semibold text-slate-900 flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                         {num.number}
                         {isPrimaryBadge(num)}
                       </div>
@@ -154,17 +154,17 @@ export default function NumbersPanel() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {!num.primary_number && (
                       <button
                         onClick={() => handleSetPrimary(num.id)}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+                        className="text-xs px-3 min-h-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
                       >
                         {isZh ? '设为主号' : 'Set primary'}
                       </button>
                     )}
                     <button
-                      className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 transition"
+                      className="text-xs px-3 min-h-9 rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 transition"
                       title={isZh ? '暂停/移除需要联系管理员' : 'Pause/remove requires admin'}
                     >
                       {isZh ? '管理' : 'Manage'}
@@ -205,13 +205,13 @@ export default function NumbersPanel() {
             ) : (
               <div className="space-y-2">
                 {available.map((num) => (
-                  <div key={num.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-4 py-3">
-                    <div>
+                  <div key={num.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border border-slate-100 rounded-lg px-4 py-3">
+                    <div className="min-w-0">
                       <div className="font-medium text-slate-900">{num.number}</div>
                       <div className="text-xs text-slate-400">{num.geo_area_code ? `Area ${num.geo_area_code}` : num.geo_country}</div>
                     </div>
                     <button
-                      className="px-4 py-1.5 rounded-lg text-white text-sm font-medium"
+                      className="px-4 min-h-11 rounded-lg text-white text-sm font-medium sm:self-start"
                       style={{ background: theme.primary }}
                       onClick={() => handleSelfAssign(num.id)}
                     >

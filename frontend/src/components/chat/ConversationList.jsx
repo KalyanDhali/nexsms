@@ -14,7 +14,7 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, h
       <div className="p-3">
         <button
           onClick={onNew}
-          className="w-full py-2 rounded-full border border-blue-600 text-blue-600 text-sm font-medium hover:bg-blue-50 transition"
+          className="w-full min-h-11 flex items-center justify-center rounded-full border border-blue-600 text-blue-600 text-sm font-medium hover:bg-blue-50 transition"
         >
           + {T('Send new message', '发送新消息')}
         </button>

@@ -63,7 +63,7 @@ export default function KeypadPanel({
   }
 
   return (
-    <div className="w-full md:w-80 shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col justify-between min-h-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl">
+    <div className="w-full md:w-80 shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl">
       <div className="relative border-b border-gray-200 pt-3 pb-2 px-4" ref={dropdownRef}>
         <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>
         <button
@@ -119,7 +119,7 @@ export default function KeypadPanel({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 max-md:hidden">
         {matches.map((m) => (
           <button
             key={m.id}
@@ -143,35 +143,37 @@ export default function KeypadPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center max-md:gap-y-4 max-md:gap-x-3 max-md:px-6 max-md:pt-6 max-md:pb-4">
-        {KEYS.map(([digit, letters]) => (
+      <div className="max-md:flex-1 max-md:flex max-md:flex-col max-md:justify-center max-md:min-h-0 max-md:overflow-y-auto">
+        <div className="grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center max-md:gap-y-4 max-md:gap-x-3 max-md:px-6 max-md:pt-6 max-md:pb-4">
+          {KEYS.map(([digit, letters]) => (
+            <button
+              key={digit}
+              type="button"
+              onClick={() => onKey(digit)}
+              className="w-14 h-14 mx-auto rounded-full hover:bg-gray-100 active:bg-gray-200 flex flex-col items-center justify-center transition"
+            >
+              <span className="text-2xl font-semibold text-[#202124] leading-tight">{digit}</span>
+              {letters && (
+                <span className="text-[10px] font-bold text-[#5f6368] tracking-widest uppercase mt-0.5">{letters}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-6 pb-4">
           <button
-            key={digit}
-            type="button"
-            onClick={() => onKey(digit)}
-            className="w-14 h-14 mx-auto rounded-full hover:bg-gray-100 active:bg-gray-200 flex flex-col items-center justify-center transition"
+            onClick={() => onDial && onDial()}
+            className="w-full bg-[#0d9d58] hover:bg-[#0b8a4d] text-white py-3 rounded-full flex items-center justify-center gap-2 font-medium shadow-sm transition"
           >
-            <span className="text-2xl font-semibold text-[#202124] leading-tight">{digit}</span>
-            {letters && (
-              <span className="text-[10px] font-bold text-[#5f6368] tracking-widest uppercase mt-0.5">{letters}</span>
-            )}
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {isZh ? '拨打' : 'Call'}
           </button>
-        ))}
+        </div>
       </div>
 
-      <div className="px-6 pb-4">
-        <button
-          onClick={() => onDial && onDial()}
-          className="w-full bg-[#0d9d58] hover:bg-[#0b8a4d] text-white py-3 rounded-full flex items-center justify-center gap-2 font-medium shadow-sm transition"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
-          </svg>
-          {isZh ? '拨打' : 'Call'}
-        </button>
-      </div>
-
-      <div className="border-t border-gray-200 px-4 py-2.5 flex items-center justify-between text-xs text-[#5f6368]">
+      <div className="border-t border-gray-200 px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] flex items-center justify-between text-xs text-[#5f6368]">
         <button onClick={onToggle} className="hover:text-[#202124] transition flex items-center gap-1">
           ✕ {t('chat.hideKeypad')}
         </button>

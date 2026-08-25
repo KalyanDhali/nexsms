@@ -302,11 +302,11 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen h-dvh flex flex-col bg-white">
       <header className="h-14 border-b border-slate-200 flex items-center gap-3 px-3 bg-white">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
-          className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center text-lg transition"
+          className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center text-lg transition"
           title="Menu"
         >
           ≡
@@ -314,7 +314,7 @@ export default function DashboardPage() {
         <span className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
         <span className="font-semibold text-slate-900 hidden md:block">{theme.siteName}</span>
 
-        <div className="flex-1 flex justify-center px-2">
+        <div className="flex-1 flex justify-center px-2 min-w-0">
           <div className="w-full max-w-xl flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f1f3f4] focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/40 border border-transparent focus-within:border-blue-500 transition">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
               <circle cx="11" cy="11" r="8" />
@@ -340,10 +340,10 @@ export default function DashboardPage() {
           >
             {T('Upgrade', '升级')}
           </button>
-          <span className="text-sm font-semibold text-slate-700">${Number(user?.balance || 0).toFixed(2)}</span>
+          <span className="hidden md:block text-sm font-semibold text-slate-700">${Number(user?.balance || 0).toFixed(2)}</span>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center transition"
+            className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center transition"
             title={T('Settings', '设置')}
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -354,7 +354,7 @@ export default function DashboardPage() {
           {user?.role === 'admin' && (
             <a
               href="/admin"
-              className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
+              className="px-3 min-h-11 flex items-center text-sm rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
             >
               Admin
             </a>
@@ -363,12 +363,12 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white overflow-x-auto">
+      <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white overflow-x-auto no-scrollbar">
         {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition relative shrink-0 whitespace-nowrap ${
+            className={`h-full px-4 text-sm font-medium rounded-lg transition relative shrink-0 whitespace-nowrap flex items-center ${
               tab === key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -385,7 +385,7 @@ export default function DashboardPage() {
         {tab === 'messages' && (
           <button
             onClick={() => setBlastOpen(true)}
-            className="ml-auto shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
+            className="ml-auto shrink-0 px-3 min-h-11 flex items-center text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
           >
             {isZh ? '批量群发' : 'Bulk blast'}
           </button>

@@ -83,7 +83,7 @@ export default function ProfileMenu() {
     <div className="relative" ref={rootRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-9 h-9 shrink-0 rounded-full overflow-hidden border border-slate-200 hover:shadow transition flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold"
+        className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full overflow-hidden border border-slate-200 hover:shadow transition flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold"
         title={T('Profile', '个人资料')}
       >
         {p.avatar ? (

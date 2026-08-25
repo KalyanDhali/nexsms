@@ -150,7 +150,7 @@ export default function ConversationView({
   const removeRecipient = (num) => setRecipients((r) => r.filter((x) => x !== num));
 
   const composerBar = (onSubmit, canSend) => (
-    <form onSubmit={onSubmit} className="border-t border-gray-200 p-3 bg-white">
+    <form onSubmit={onSubmit} className="border-t border-gray-200 p-3 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {mediaUrl && (
         <div className="mb-2 flex items-center">
           <div className="relative shrink-0">
@@ -175,7 +175,7 @@ export default function ConversationView({
               setAttachMenu((v) => (v === 'closed' ? 'main' : 'closed'));
               setEmojiOpen(false);
             }}
-            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition"
+            className="w-11 h-11 md:w-9 md:h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition"
             title={T('Attach', '添加附件')}
           >
             {uploading ? <span className="text-sm">…</span> : <span className="text-2xl leading-none text-gray-400">+</span>}
@@ -225,7 +225,7 @@ export default function ConversationView({
               setEmojiOpen((v) => !v);
               if (attachMenu !== 'closed') setAttachMenu('closed');
             }}
-            className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+            className="w-11 h-11 md:w-9 md:h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
             title={T('Emoji', '表情')}
           >
             <svg viewBox="0 0 24 24" className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -245,7 +245,7 @@ export default function ConversationView({
         <button
           type="submit"
           disabled={!canSend || (!draft.trim() && !mediaUrl)}
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
+          className={`w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center transition ${
             canSend && (draft.trim() || mediaUrl) ? 'bg-[#1a73e8] text-white hover:bg-[#1765cc]' : 'bg-gray-100 text-gray-400'
           }`}
         >
@@ -342,7 +342,7 @@ export default function ConversationView({
               {onMobileBack && (
                 <button
                   onClick={() => onMobileBack && onMobileBack()}
-                  className="md:hidden w-9 h-9 shrink-0 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition mr-1"
+                  className="md:hidden w-11 h-11 shrink-0 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition mr-1"
                   title={T('Back', '返回')}
                 >
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

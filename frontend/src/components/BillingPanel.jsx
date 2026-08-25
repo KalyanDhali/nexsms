@@ -114,7 +114,7 @@ export default function BillingPanel() {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50">
       {toast && (
-        <div className="fixed top-16 right-6 z-50 px-4 py-2 rounded-lg text-white text-sm shadow-lg" style={{ background: toastColor || theme.primary }}>
+        <div className="fixed top-16 right-4 left-4 sm:left-auto z-50 px-4 py-2 rounded-lg text-white text-sm shadow-lg text-center" style={{ background: toastColor || theme.primary }}>
           {toast}
         </div>
       )}
@@ -169,7 +169,7 @@ export default function BillingPanel() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-4 md:p-6">
         <h1 className="text-xl font-bold text-slate-900">{T('Billing & Wallet', '账单与钱包')}</h1>
         <p className="text-sm text-slate-500 mt-0.5 mb-6">{T('Manage your balance, subscription and deposits', '管理余额、订阅与充值')}</p>
 
