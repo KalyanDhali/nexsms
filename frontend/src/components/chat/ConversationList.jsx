@@ -23,7 +23,7 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
 
   return (
     <aside
-      className="w-full md:w-[28%] md:min-w-[260px] md:max-w-[360px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
+      className="w-full shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900 min-w-0"
       style={hidden ? { display: 'none' } : undefined}
     >
       <div className="px-3 pt-3 pb-2 space-y-2">

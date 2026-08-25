@@ -677,8 +677,14 @@ export default function DashboardPage() {
     }
   };
 
+  const chatGridCls = [
+    'chat-grid desktop-min-width flex flex-1 overflow-hidden relative',
+    !isMobile && listCollapsed ? 'no-list' : '',
+    !isMobile && !keypadOpen ? 'no-keypad' : '',
+  ].filter(Boolean).join(' ');
+
   const renderChatArea = () => (
-    <div className="desktop-min-width flex flex-1 overflow-hidden relative">
+    <div className={chatGridCls}>
       {isMobile ? (
         navOpen && (
           <NavSidebar
@@ -810,8 +816,8 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="app-shell fixed top-0 left-0 w-full h-dvh flex flex-col bg-white dark:bg-slate-900">
-      <header className="desktop-min-width h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0">
+    <div className="app-shell fixed top-0 left-0 w-full bg-white dark:bg-slate-900">
+      <header className="desktop-min-width h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
           className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-lg transition"
@@ -954,7 +960,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="desktop-min-width hidden md:flex h-11 border-b border-slate-200 dark:border-slate-800 items-center px-4 gap-1 bg-white dark:bg-slate-900 overflow-x-auto no-scrollbar shrink-0">
+      <div className="desktop-min-width hidden md:flex h-11 border-b border-slate-200 dark:border-slate-800 items-center px-4 gap-1 bg-white dark:bg-slate-900 overflow-x-auto no-scrollbar shrink-0 min-w-0">
         {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
           <button
             key={key}

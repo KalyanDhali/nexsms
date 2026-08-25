@@ -44,19 +44,57 @@ html.dark body {
   scrollbar-width: none;
 }
 
-/* Desktop-site mode on mobile browsers (e.g., Chrome/Edge/Firefox/Brave
-   "Desktop site" at ~980px layout viewport): enforce a 1024px minimum so
-   the 3 columns (Sidebar / Chat / Dialpad) never crush into vertical
-   strips; the app shell scrolls horizontally instead. Standard desktop
-   (>=1024px) renders exactly 1024px and shows no scrollbar. */
+/* Desktop-site mode on mobile browsers (Chrome/Edge/Firefox/Brave): the
+   app shell is a fixed grid pinned to the dynamic viewport. On desktop
+   layouts it enforces a 1000px minimum with horizontal scroll so the
+   Sidebar / Chat / Dialpad columns never crush into vertical strips, and
+   soft-keyboard viewport changes never shift the header or side panels.
+   Standard desktop (>=1000px) renders at exactly 1000px, no scrollbar. */
+.app-shell {
+  height: 100dvh;
+  height: -webkit-fill-available;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-width: 0;
+}
 @media screen and (min-width: 768px) {
   .app-shell {
     overflow-x: auto;
     overscroll-behavior-x: contain;
   }
+  /* The app shell stays pinned to the viewport width (fixed); the content
+     enforces the 1000px minimum so the sidebar/chat/dialpad columns never
+     crush into vertical strips. Below 1000px viewports the shell scrolls
+     horizontally to reveal the full desktop layout. */
   .desktop-min-width {
-    min-width: 1024px;
+    min-width: 1000px;
   }
+  .chat-grid {
+    display: grid;
+    grid-template-columns: 88px minmax(260px, 1fr) minmax(350px, 2fr) minmax(260px, 1fr);
+    min-height: 0;
+  }
+  .chat-grid > * {
+    min-width: 0;
+    min-height: 0;
+  }
+  .chat-grid.no-list {
+    grid-template-columns: 88px 44px minmax(350px, 2fr) minmax(260px, 1fr);
+  }
+  .chat-grid.no-keypad {
+    grid-template-columns: 88px minmax(260px, 1fr) minmax(350px, 2fr) 44px;
+  }
+  .chat-grid.no-list.no-keypad {
+    grid-template-columns: 88px 44px minmax(350px, 2fr) 44px;
+  }
+}
+
+/* Prevent mobile-browser zoom-on-focus distortion: any focused input
+   must render at >=16px, otherwise Safari auto-zooms the whole page. */
+input,
+textarea,
+select {
+  font-size: 16px !important;
 }
 
 ::-webkit-scrollbar {
