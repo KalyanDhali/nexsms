@@ -44,36 +44,30 @@ html.dark body {
   scrollbar-width: none;
 }
 
-/* Fixed viewport container with absolute locking. The outer app shell is
-   pinned to the viewport on all sides so the browser shell cannot stretch,
-   shift, or re-layout when the touch keyboard pushes up. `interactive-widget
-   =resizes-visual` in the viewport meta keeps the layout canvas at a fixed
-   1024px; `touch-action: pan-x pan-y` permits panning while blocking
-   pinch-zoom on the shell. The chat middle panel is the only overflow-y
-   scrollable region. */
+/* App shell base (phones, width=device-width): a fixed, viewport-pinned
+   grid so the browser shell can't stretch or shift when the touch
+   keyboard opens; the chat panel is the only vertical scroll region. */
 .app-shell {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow-x: auto;
-  overflow-y: hidden;
-  touch-action: pan-x pan-y;
+  width: 100%;
+  height: 100dvh;
+  height: -webkit-fill-available;
   display: grid;
   grid-template-rows: auto auto 1fr;
   min-width: 0;
 }
+
+/* Desktop layout (tablets, narrow windows, and phone Desktop Site mode):
+   content enforces a 1000px minimum so the Sidebar / Chat / Dialpad
+   columns never crush into vertical strips; below 1000px the shell
+   scrolls horizontally to reveal the full desktop layout. */
 @media screen and (min-width: 768px) {
   .app-shell {
+    overflow-x: auto;
     overscroll-behavior-x: contain;
   }
-  /* The app shell stays pinned to the viewport width (fixed); the content
-     enforces the 1000px minimum so the sidebar/chat/dialpad columns never
-     crush into vertical strips. Below 1000px viewports the shell scrolls
-     horizontally to reveal the full desktop layout. */
   .desktop-min-width {
     min-width: 1000px;
   }
@@ -94,6 +88,21 @@ html.dark body {
   }
   .chat-grid.no-list.no-keypad {
     grid-template-columns: 88px 44px minmax(350px, 2fr) 44px;
+  }
+}
+
+/* Desktop Mode (mobile browser "Desktop site" viewport >=980px): hard
+   lock the canvas so a touch-keyboard pop cannot re-layout, re-scale,
+   or shift the app. JS (window.visualViewport) re-pins scroll in the
+   same situation; touch-action blocks pinch-zoom on the shell. */
+@media screen and (min-width: 980px) {
+  .app-shell {
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow-y: hidden;
+    touch-action: pan-x pan-y;
   }
 }
 
