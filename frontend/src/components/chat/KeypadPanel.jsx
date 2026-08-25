@@ -63,16 +63,28 @@ export default function KeypadPanel({
   }
 
   return (
-    <div className="w-full md:w-80 shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl">
-      <div className="relative border-b border-gray-200 pt-3 pb-2 px-4" ref={dropdownRef}>
-        <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>
+    <div className="w-full md:w-[25%] md:min-w-[250px] md:max-w-[320px] shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl" data-testid="keypad-panel">
+      <div className="relative border-b border-gray-200 pt-3 pb-2 px-4 flex items-start gap-2" ref={dropdownRef}>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>
+          <button
+            onClick={() => setDropdownOpen((v) => !v)}
+            className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-[#202124] hover:text-blue-600 transition group max-w-full"
+          >
+            <span className="truncate">{fromNumber || t('chat.myNumbers')}</span>
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        </div>
         <button
-          onClick={() => setDropdownOpen((v) => !v)}
-          className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-[#202124] hover:text-blue-600 transition group"
+          onClick={onToggle}
+          className="hidden md:flex w-8 h-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 items-center justify-center transition"
+          title={t('chat.hideKeypad')}
+          aria-label={t('chat.hideKeypad')}
         >
-          <span className="truncate">{fromNumber || t('chat.myNumbers')}</span>
-          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-600" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
+          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
         {dropdownOpen && (

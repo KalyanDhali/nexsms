@@ -8,7 +8,7 @@ const FILTERS = [
   { key: 'failed', en: 'Failed', zh: '失败' },
 ];
 
-export default function ConversationList({ threads, activeId, onSelect, onNew, query = '', hidden, loading = false, error = false, onRetry }) {
+export default function ConversationList({ threads, activeId, onSelect, onNew, query = '', hidden, loading = false, error = false, onRetry, onCollapse }) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
@@ -23,20 +23,34 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
 
   return (
     <aside
-      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
+      className="w-full md:w-[28%] md:min-w-[260px] md:max-w-[360px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
       style={hidden ? { display: 'none' } : undefined}
     >
       <div className="px-3 pt-3 pb-2 space-y-2">
-        <button
-          onClick={onNew}
-          className="w-full min-h-11 flex items-center justify-center gap-2 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition shadow-sm"
-        >
-          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          {T('New message', '新消息')}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onNew}
+            className="flex-1 min-w-0 min-h-11 flex items-center justify-center gap-2 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition shadow-sm"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            {T('New message', '新消息')}
+          </button>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              className="hidden md:flex w-11 h-11 shrink-0 rounded-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 items-center justify-center transition"
+              title={T('Collapse list', '折叠列表')}
+              aria-label={T('Collapse list', '折叠列表')}
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {FILTERS.map((f) => (
