@@ -776,7 +776,6 @@ export default function ConversationView({
               </span>
             ))}
             <input
-              autoFocus
               value={dialInput}
               onChange={(e) => onDialChange(e.target.value)}
               onFocus={() => setToFocused(true)}
