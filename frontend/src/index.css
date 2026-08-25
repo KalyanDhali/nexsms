@@ -71,51 +71,61 @@ html.dark body {
   touch-action: auto !important;
 }
 
-/* Desktop columns (tablets, narrow windows, phone Desktop Site mode):
-   a clean flex row. Sidebars keep fixed widths; only the messages area
-   scrolls vertically. Below the 1024px content minimum the page/shell
-   scrolls horizontally instead of collapsing the UI. */
+/* ------------------------------------------------------------------ *
+ * Responsive tiers. The mobile/tablet/desktop split is driven by the
+ * JS phone detection (`html.is-phone`), NOT just the layout viewport.
+ * A phone (physical screen <=767px) always gets the single-panel mobile
+ * architecture even when the browser reports a wide layout viewport
+ * (Desktop Site / pinch-zoom out); those desktop rules below are gated
+ * with `html:not(.is-phone)` so they never squeeze onto a phone.
+ * ------------------------------------------------------------------ */
+
+/* TABLET + DESKTOP (>=768, non-phone): nav rail + list + chat flex row. */
 @media screen and (min-width: 768px) {
-  .chat-grid {
+  html:not(.is-phone) .chat-grid {
     display: flex;
     flex: 1;
     min-height: 0;
     align-items: stretch;
   }
-  .desktop-min-width {
-    min-width: 1024px;
-  }
-  .sidebar-left {
+  html:not(.is-phone) .sidebar-left {
     width: 280px;
     flex-shrink: 0;
   }
-  .chat-middle {
+  html:not(.is-phone) .chat-middle {
     flex: 1;
-    min-width: 400px;
+    min-width: 320px;
     min-height: 0;
     height: 100%;
   }
-  .chat-messages-area {
+  html:not(.is-phone) .chat-messages-area {
     flex: 1;
     overflow-y: auto;
   }
-  .sidebar-right {
-    width: 300px;
-    flex-shrink: 0;
+  html:not(.is-phone) .list-column {
+    width: 320px;
   }
 }
 
-/* Desktop Mode (mobile browsers' "Desktop site", >=980px layout viewport):
-   pin the shell to the viewport height with a 1024px minimum width.
-   Only the messages area scrolls vertically; wider content overflows
-   horizontally via the shell scrollbar. */
-@media screen and (min-width: 980px) {
-  .app-shell {
-    width: 100%;
-    min-width: 1024px;
-    height: 100vh;
-    overflow-x: auto;
-    overflow-y: hidden;
+/* TABLET ONLY (768-1279, non-phone): the dialer is NOT a column here - it
+   opens as a full-screen overlay (see KeypadPanel). Contact details also
+   open as a centered sheet instead of a static 300px column. */
+@media screen and (min-width: 768px) and (max-width: 1279px) {
+  html:not(.is-phone) .chat-grid .keypad-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+  }
+}
+
+/* DESKTOP (>=1280, non-phone): restore the dialer/details columns. */
+@media screen and (min-width: 1280px) {
+  html:not(.is-phone) .sidebar-right {
+    width: 300px;
+    flex-shrink: 0;
+  }
+  html:not(.is-phone) .chat-middle {
+    min-width: 300px;
   }
 }
 

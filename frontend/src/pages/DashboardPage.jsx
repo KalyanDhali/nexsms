@@ -83,7 +83,7 @@ export default function DashboardPage() {
   const [fromNumber, setFromNumber] = useState('');
   const [fromNumberId, setFromNumberId] = useState('');
   const [keypadOpen, setKeypadOpen] = useState(
-    () => typeof window !== 'undefined' && !window.matchMedia('(max-width: 767px)').matches
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
   );
   const [numbers, setNumbers] = useState([]);
   const [tab, setTab] = useState('messages');
@@ -95,10 +95,20 @@ export default function DashboardPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [senderSheetOpen, setSenderSheetOpen] = useState(false);
   const [bnav, setBnav] = useState('home');
-  const isMobile = useMediaQuery('(max-width: 767px)');
+  // Mobile is decided by the PHYSICAL screen, not just the layout viewport:
+  // a phone (screen <=767px) keeps the single-panel UI even when the browser
+  // reports a wide layout viewport (Desktop Site / pinch-zoom out).
+  const isPhoneHardware = () => typeof screen !== 'undefined' && screen.width > 0 && screen.width <= 767;
+  const isMobile = useMediaQuery('(max-width: 767px)') || isPhoneHardware();
+  const isDesktop = useMediaQuery('(min-width: 1280px)');
   const [navOpen, setNavOpen] = useState(false);
   const [mobileView, setMobileView] = useState('list');
   const [listCollapsed, setListCollapsed] = useState(false);
+  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-phone', isMobile);
+  }, [isMobile]);
 
   const msgsCache = useRef({});
   const threadsRef = useRef([]);
@@ -607,10 +617,14 @@ export default function DashboardPage() {
   };
 
   const openDetails = () => {
-    if (isMobile) setMobileView('details');
-    else {
+    if (isMobile) {
+      setMobileView('details');
+    } else if (isDesktop) {
       setKeypadOpen(false);
       setDetailsOpen((v) => !v);
+    } else {
+      // Tablet / narrow window: details open as a centered sheet, not a column.
+      setDetailsSheetOpen((v) => !v);
     }
   };
 
@@ -677,7 +691,7 @@ export default function DashboardPage() {
     }
   };
 
-  const chatGridCls = 'chat-grid desktop-min-width flex flex-1 relative';
+  const chatGridCls = 'chat-grid flex flex-1 relative min-w-0';
 
   const renderChatArea = () => (
     <div className={chatGridCls}>
@@ -717,7 +731,7 @@ export default function DashboardPage() {
             loading={threadsLoading}
             error={!!threadsError}
             onRetry={refreshConversations}
-            onCollapse={() => setListCollapsed(true)}
+            onCollapse={isMobile ? undefined : () => setListCollapsed(true)}
             hidden={isMobile && mobileView === 'thread'}
           />
         ) : (
@@ -762,6 +776,7 @@ export default function DashboardPage() {
           messagesError={!!messagesError}
           onRetryMessages={() => activeId && loadMessages(activeId)}
           onDeleteMessage={removeMessage}
+          isMobile={isMobile}
           hidden={isMobile && mobileView === 'list'}
         />
       ) : (
@@ -769,7 +784,7 @@ export default function DashboardPage() {
           {nav === 'calls' ? T('Call history', '通话记录') : nav === 'contacts' ? T('Contacts', '联系人') : ''}
         </div>
       )}
-      {nav === 'messages' && active && detailsOpen && (
+      {nav === 'messages' && active && detailsOpen && isDesktop && (
         <ContactDetailsPanel
           thread={active}
           fromNumber={fromNumber}
@@ -796,7 +811,7 @@ export default function DashboardPage() {
           if (dialInput.trim()) setNav('calls');
         }}
       />
-      {isMobile && !keypadOpen && nav === 'messages' && mobileView !== 'details' && (
+      {isMobile && !keypadOpen && nav === 'messages' && mobileView === 'list' && (
         <button
           onClick={() => setKeypadOpen(true)}
           className="absolute bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center transition active:scale-95 z-30"
@@ -813,7 +828,7 @@ export default function DashboardPage() {
 
   return (
     <div className="app-shell bg-white dark:bg-slate-900">
-      <header className="desktop-min-width h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0">
+      <header className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
           className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-lg transition"
@@ -823,68 +838,76 @@ export default function DashboardPage() {
           ≡
         </button>
         <span className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
-        <span className="font-semibold text-slate-900 dark:text-white hidden md:block">{theme.siteName}</span>
+        {!isMobile && <span className="font-semibold text-slate-900 dark:text-white hidden md:block">{theme.siteName}</span>}
 
         <div className="flex-1 flex justify-center px-2 min-w-0">
-          <button
-            onClick={() => {
-              setSearchInput(search);
-              setSearchOpen(true);
-            }}
-            className="md:hidden w-11 h-11 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
-            title={T('Search', '搜索')}
-            aria-label={T('Search', '搜索')}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
-          <div className="hidden md:flex w-full max-w-xl items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/40 border border-transparent focus-within:border-primary transition">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={T('Search conversations', '搜索对话')}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-800 dark:text-slate-100 min-w-0"
-            />
-            {searchInput !== search && (
-              <span className="block w-3.5 h-3.5 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin shrink-0" aria-label={T('Searching', '搜索中')} />
-            )}
-            {searchInput && (
-              <button
-                onClick={() => {
-                  setSearchInput('');
-                  setSearch('');
-                }}
-                className="w-6 h-6 shrink-0 rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition"
-                title={T('Clear', '清除')}
-                aria-label={T('Clear search', '清除搜索')}
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-          </div>
+          {isMobile && (
+            <button
+              onClick={() => {
+                setSearchInput(search);
+                setSearchOpen(true);
+              }}
+              className="w-11 h-11 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+              title={T('Search', '搜索')}
+              aria-label={T('Search', '搜索')}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+          )}
+          {!isMobile && (
+            <div className="hidden md:flex w-full max-w-xl items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/40 border border-transparent focus-within:border-primary transition">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={T('Search conversations', '搜索对话')}
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-800 dark:text-slate-100 min-w-0"
+              />
+              {searchInput !== search && (
+                <span className="block w-3.5 h-3.5 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin shrink-0" aria-label={T('Searching', '搜索中')} />
+              )}
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearch('');
+                  }}
+                  className="w-6 h-6 shrink-0 rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition"
+                  title={T('Clear', '清除')}
+                  aria-label={T('Clear search', '清除搜索')}
+                >
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          <span className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-            {T('Receiving calls', '正在接听来电')}
-          </span>
-          <button
-            onClick={() => setTab('billing')}
-            className="hidden sm:block px-4 py-1.5 rounded-full bg-primary text-white text-sm font-medium hover:opacity-90 transition"
-          >
-            {T('Upgrade', '升级')}
-          </button>
-          <span className="hidden md:block text-sm font-semibold text-slate-700 dark:text-slate-300">${Number(user?.balance || 0).toFixed(2)}</span>
+          {!isMobile && (
+            <span className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+              {T('Receiving calls', '正在接听来电')}
+            </span>
+          )}
+          {!isMobile && (
+            <button
+              onClick={() => setTab('billing')}
+              className="hidden sm:block px-4 py-1.5 rounded-full bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+            >
+              {T('Upgrade', '升级')}
+            </button>
+          )}
+          {!isMobile && <span className="hidden md:block text-sm font-semibold text-slate-700 dark:text-slate-300">${Number(user?.balance || 0).toFixed(2)}</span>}
           <button
             onClick={() => setDark((v) => !v)}
             className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
@@ -956,34 +979,36 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="desktop-min-width hidden md:flex h-11 border-b border-slate-200 dark:border-slate-800 items-center px-4 gap-1 bg-white dark:bg-slate-900 overflow-x-auto no-scrollbar shrink-0 min-w-0">
-        {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`h-full px-4 text-sm font-medium rounded-lg transition relative shrink-0 whitespace-nowrap flex items-center ${
-              tab === key ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            {key === 'messages' ? (isZh ? '消息' : 'Messages')
-              : key === 'numbers' ? (isZh ? '号码' : 'Numbers')
-              : key === 'billing' ? (isZh ? '账单' : 'Billing')
-              : key === 'api' ? 'API'
-              : (isZh ? '账户' : 'Account')}
-            {tab === key && (
-              <span className="absolute -bottom-[11px] left-3 right-3 h-0.5 rounded-full" style={{ background: theme.primary }} />
-            )}
-          </button>
-        ))}
-        {tab === 'messages' && (
-          <button
-            onClick={() => setBlastOpen(true)}
-            className="ml-auto shrink-0 px-3 min-h-11 flex items-center text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition"
-          >
-            {isZh ? '批量群发' : 'Bulk blast'}
-          </button>
-        )}
-      </div>
+      {!isMobile && (
+        <div className="hidden md:flex h-11 border-b border-slate-200 dark:border-slate-800 items-center px-4 gap-1 bg-white dark:bg-slate-900 overflow-x-auto no-scrollbar shrink-0 min-w-0">
+          {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`h-full px-4 text-sm font-medium rounded-lg transition relative shrink-0 whitespace-nowrap flex items-center ${
+                tab === key ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {key === 'messages' ? (isZh ? '消息' : 'Messages')
+                : key === 'numbers' ? (isZh ? '号码' : 'Numbers')
+                : key === 'billing' ? (isZh ? '账单' : 'Billing')
+                : key === 'api' ? 'API'
+                : (isZh ? '账户' : 'Account')}
+              {tab === key && (
+                <span className="absolute -bottom-[11px] left-3 right-3 h-0.5 rounded-full" style={{ background: theme.primary }} />
+              )}
+            </button>
+          ))}
+          {tab === 'messages' && (
+            <button
+              onClick={() => setBlastOpen(true)}
+              className="ml-auto shrink-0 px-3 min-h-11 flex items-center text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition"
+            >
+              {isZh ? '批量群发' : 'Bulk blast'}
+            </button>
+          )}
+        </div>
+      )}
 
       {tab === 'messages' ? (
         settingsOpen ? (
@@ -1031,6 +1056,18 @@ export default function DashboardPage() {
           onMessage={() => setMobileView('thread')}
           mobile
           onClose={() => setMobileView('thread')}
+        />
+      )}
+
+      {!isMobile && !isDesktop && detailsSheetOpen && active && (
+        <ContactDetailsPanel
+          thread={active}
+          fromNumber={fromNumber}
+          assignedNumber={active.assignedNumber}
+          mobile
+          onBack={() => setDetailsSheetOpen(false)}
+          onMessage={() => setDetailsSheetOpen(false)}
+          onClose={() => setDetailsSheetOpen(false)}
         />
       )}
 

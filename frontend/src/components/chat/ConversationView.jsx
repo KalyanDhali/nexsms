@@ -46,6 +46,7 @@ export default function ConversationView({
   onRetryMessages,
   onDeleteMessage,
   hidden,
+  isMobile = false,
 }) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
@@ -744,11 +745,11 @@ export default function ConversationView({
       {!thread && composing ? (
         <div ref={composerRef} className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900">
           <div className="relative border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center flex-wrap">
-            {onMobileBack && (
+            {onMobileBack && isMobile && (
               <button
                 type="button"
                 onClick={() => onMobileBack && onMobileBack()}
-                className="md:hidden w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition mr-1"
+                className="w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition mr-1"
                 title={T('Back', '返回')}
                 aria-label={T('Back', '返回')}
               >
@@ -855,10 +856,10 @@ export default function ConversationView({
       ) : (
         <>
           <div className="px-3 sm:px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2 shrink-0">
-            {onMobileBack && (
+            {onMobileBack && isMobile && (
               <button
                 onClick={() => onMobileBack && onMobileBack()}
-                className="md:hidden w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition"
+                className="w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition"
                 title={T('Back', '返回')}
                 aria-label={T('Back', '返回')}
               >
@@ -886,18 +887,20 @@ export default function ConversationView({
               </span>
             </button>
             <span className="flex-1" />
-            <button
-              onClick={() => onOpenDetails && onOpenDetails()}
-              className="hidden md:flex w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 items-center justify-center transition"
-              title={T('Details', '详情')}
-              aria-label={T('Details', '详情')}
-            >
-              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="19" cy="12" r="1" />
-                <circle cx="5" cy="12" r="1" />
-              </svg>
-            </button>
+            {!isMobile && (
+              <button
+                onClick={() => onOpenDetails && onOpenDetails()}
+                className="hidden md:flex w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 items-center justify-center transition"
+                title={T('Details', '详情')}
+                aria-label={T('Details', '详情')}
+              >
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="1" />
+                  <circle cx="19" cy="12" r="1" />
+                  <circle cx="5" cy="12" r="1" />
+                </svg>
+              </button>
+            )}
           </div>
 
           <div className="relative flex-1 min-h-0 flex flex-col">
