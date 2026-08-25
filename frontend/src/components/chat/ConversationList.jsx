@@ -1,56 +1,77 @@
+import { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
-import Avatar from './Avatar.jsx';
+import ConversationItem from './ConversationItem.jsx';
+
+const FILTERS = [
+  { key: 'all', en: 'All', zh: '全部' },
+  { key: 'unread', en: 'Unread', zh: '未读' },
+  { key: 'failed', en: 'Failed', zh: '失败' },
+];
 
 export default function ConversationList({ threads, activeId, onSelect, onNew, hidden }) {
-  const { lang } = useLanguage();
+  const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
+  const [filter, setFilter] = useState('all');
+
+  const hasFailed = (th) => th.messages?.some((m) => m.direction === 'out' && m.status === 'failed');
+  const filtered = threads.filter((th) => {
+    if (filter === 'unread') return th.unread > 0;
+    if (filter === 'failed') return hasFailed(th);
+    return true;
+  });
 
   return (
     <aside
-      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 flex flex-col bg-white"
+      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
       style={hidden ? { display: 'none' } : undefined}
     >
-      <div className="p-3">
+      <div className="px-3 pt-3 pb-2 space-y-2">
         <button
           onClick={onNew}
-          className="w-full min-h-11 flex items-center justify-center rounded-full border border-blue-600 text-blue-600 text-sm font-medium hover:bg-blue-50 transition"
+          className="w-full min-h-11 flex items-center justify-center gap-2 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition shadow-sm"
         >
-          + {T('Send new message', '发送新消息')}
+          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          {T('New message', '新消息')}
         </button>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`shrink-0 px-3 h-8 rounded-full text-xs font-medium transition border ${
+                filter === f.key
+                  ? 'bg-primary/10 text-primary border-primary/30 dark:bg-primary/20 dark:text-indigo-300 dark:border-primary/40'
+                  : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {isZh ? f.zh : f.en}
+            </button>
+          ))}
+        </div>
       </div>
+
       <div className="flex-1 overflow-y-auto">
-        {threads.map((thread) => (
-          <button
+        {filtered.map((thread) => (
+          <ConversationItem
             key={thread.id}
+            thread={thread}
+            active={thread.id === activeId}
             onClick={() => onSelect(thread.id)}
-            className={`w-full text-left px-4 py-3 flex items-start gap-3 transition border-b border-slate-100 ${
-              thread.id === activeId ? 'bg-blue-50/70' : 'hover:bg-slate-50'
-            }`}
-          >
-            <Avatar name={thread.name} src={thread.avatar} size={40} />
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2">
-                <span className="font-medium text-sm text-slate-900 truncate">{thread.name}</span>
-                <span className="shrink-0 text-[11px] text-slate-400">{thread.time}</span>
-              </span>
-              <span className="flex items-center gap-2 mt-0.5">
-                {thread.lastDirection === 'out' && (
-                  <span className="shrink-0 text-xs text-slate-500">You:</span>
-                )}
-                <span className="text-xs text-slate-500 truncate">{thread.preview}</span>
-                {thread.unread > 0 && (
-                  <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                    {thread.unread}
-                  </span>
-                )}
-              </span>
-            </span>
-          </button>
+          />
         ))}
-        {threads.length === 0 && (
-          <div className="text-center text-sm text-slate-400 py-10">
-            {T('No conversations found', '未找到对话')}
+        {filtered.length === 0 && (
+          <div className="text-center text-sm text-slate-400 dark:text-slate-500 py-12 px-6">
+            <div className="text-3xl mb-2 text-slate-300 dark:text-slate-600">··</div>
+            {threads.length === 0
+              ? T('No conversations yet', '暂无对话')
+              : filter === 'unread'
+              ? T('No unread messages', '没有未读消息')
+              : T('No failed messages', '没有失败消息')}
           </div>
         )}
       </div>

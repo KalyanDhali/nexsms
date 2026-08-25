@@ -38,7 +38,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
   await query('UPDATE conversations SET unread_count = 0 WHERE id = $1', [req.params.id]);
 
   const { rows } = await query(
-    `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, created_at AS time
+    `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, media_url, created_at AS time
      FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
     [req.params.id]
   );

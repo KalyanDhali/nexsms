@@ -26,6 +26,11 @@ body {
   overscroll-behavior-x: none;
 }
 
+html.dark body {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
 #root {
   height: 100%;
   max-width: 100%;
@@ -48,4 +53,30 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 3px;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheetUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-fade {
+  animation: fadeIn 0.18s ease-out;
+}
+.animate-sheet-up {
+  animation: sheetUp 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade, .animate-sheet-up, * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

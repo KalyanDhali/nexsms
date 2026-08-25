@@ -34,7 +34,7 @@ const ICONS = {
   ),
 };
 
-export default function NavSidebar({ active, onChange, collapsed, drawer, onClose }) {
+export default function NavSidebar({ active, onChange, collapsed, drawer, onClose, extraItems = [] }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   if (!drawer && collapsed) return null;
@@ -92,6 +92,26 @@ export default function NavSidebar({ active, onChange, collapsed, drawer, onClos
             </button>
           </div>
           {items.map(renderItem)}
+          {extraItems.length > 0 && (
+            <>
+              <div className="mt-2 mb-1 mx-2 border-t border-slate-100" />
+              {extraItems.map((item) => {
+                const on = active === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => onChange(item.key)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+                      on ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="w-[18px] text-center text-base leading-none">·</span>
+                    <span>{isZh ? item.zh : item.label}</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </nav>
       </div>
     );
