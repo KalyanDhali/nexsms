@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
+import BottomSheet from './BottomSheet.jsx';
 import Avatar from './Avatar.jsx';
 
-export default function ContactDetailsPanel({ thread, fromNumber, assignedNumber, onBack, onMessage, mobile, onClose }) {
+export default function ContactDetailsPanel({ thread, fromNumber, assignedNumber, onMessage, mobile, onClose }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
@@ -112,22 +113,48 @@ export default function ContactDetailsPanel({ thread, fromNumber, assignedNumber
 
   if (mobile) {
     return (
-      <div className="md:hidden fixed inset-0 z-40 bg-white dark:bg-slate-900 flex flex-col">
-        <div className="h-14 shrink-0 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 px-2 bg-white dark:bg-slate-900">
-          <button
-            onClick={onBack}
-            className="w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition"
-            aria-label={T('Back', '返回')}
-          >
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
-          <span className="font-semibold text-slate-900 dark:text-white">{T('Contact details', '联系人详情')}</span>
+      <BottomSheet open onClose={onClose} title={T('Contact details', '联系人详情')} ariaLabel={T('Contact details', '联系人详情')}>
+        <div className="flex flex-col items-center gap-3 px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+          <Avatar name={thread.name} src={thread.avatar} size={72} />
+          <div className="text-center">
+            <div className="font-semibold text-slate-900 dark:text-white truncate max-w-full">{thread.name}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{thread.contactNumber}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            {actions.map((a) =>
+              a.href ? (
+                <a
+                  key={a.key}
+                  href={a.href}
+                  className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-primary hover:text-white transition flex flex-col items-center justify-center gap-0.5"
+                  title={isZh ? a.zh : a.en}
+                >
+                  {a.icon}
+                  <span className="text-[9px] font-medium leading-none">{isZh ? a.zh : a.en}</span>
+                </a>
+              ) : (
+                <button
+                  key={a.key}
+                  onClick={a.onClick}
+                  className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-primary hover:text-white transition flex flex-col items-center justify-center gap-0.5"
+                  title={isZh ? a.zh : a.en}
+                >
+                  {a.icon}
+                  <span className="text-[9px] font-medium leading-none">{isZh ? a.zh : a.en}</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
-        {content}
-      </div>
+        <div className="px-1 py-3 space-y-3">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+              <span className="text-xs text-slate-500 dark:text-slate-400">{r.label}</span>
+              <span className={`text-sm font-medium text-slate-900 dark:text-white truncate ${r.mono ? 'font-mono' : ''}`}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      </BottomSheet>
     );
   }
 

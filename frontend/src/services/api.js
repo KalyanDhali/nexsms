@@ -118,7 +118,9 @@ export const deleteAiRule = (id) => api.delete(`/ai/rules/${id}`);
 export const getAiSuggestions = (text) => api.get('/ai/suggestions', { params: { text } });
 
 export const getConversations = () => api.get('/messages/conversations');
-export const getConversationMessages = (id) => api.get(`/messages/conversations/${id}/messages`);
+export const getConversationMessages = (id, params) => api.get(`/messages/conversations/${id}/messages`, { params });
+export const getMessageDetails = (id) => api.get(`/messages/${id}`);
+export const deleteMessage = (id) => api.delete(`/messages/${id}`);
 export const getScheduledMessages = () => api.get('/messages/scheduled');
 export const cancelScheduledMessage = (id) => api.post(`/messages/scheduled/${id}/cancel`);
 export const createConversation = (payload) => api.post('/messages/conversations', payload);

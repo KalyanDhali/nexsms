@@ -67,16 +67,35 @@ html.dark ::-webkit-scrollbar-thumb {
   from { transform: translateY(24px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+@keyframes toastIn {
+  from { transform: translateY(-10px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
 .animate-fade {
   animation: fadeIn 0.18s ease-out;
 }
 .animate-sheet-up {
   animation: sheetUp 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
+.animate-toast-in {
+  animation: toastIn 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade, .animate-sheet-up, * {
+  .animate-fade, .animate-sheet-up, .animate-toast-in, * {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.no-focus-ring :focus-visible {
+  outline: none;
+}
+::selection {
+  background: rgba(99, 102, 241, 0.25);
 }

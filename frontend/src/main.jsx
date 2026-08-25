@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import { DarkModeProvider } from './context/DarkModeContext.jsx';
 import { LanguageProvider } from './context/LanguageContext.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
 import './index.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
@@ -21,7 +22,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <DarkModeProvider>
           <ThemeProvider>
             <AuthProvider>
-              <App />
+              <ToastProvider>
+                <App />
+              </ToastProvider>
             </AuthProvider>
           </ThemeProvider>
         </DarkModeProvider>

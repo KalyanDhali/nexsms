@@ -9,6 +9,7 @@ import {
   getBurstLimit,
 } from '../services/messageService.js';
 import { checkBurst } from '../services/burstLimit.js';
+import { publishRealtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -28,6 +29,9 @@ router.get('/conversations', async (req, res) => {
 });
 
 // GET messages for a conversation
+// Supports cursor pagination: ?limit=N (default 100, max 200) returns the
+// newest N; ?before=<created_at>&limit=N returns the N messages strictly
+// older than the cursor (for loading older history). Always ASC by time.
 router.get('/conversations/:id/messages', async (req, res) => {
   const { rows: conv } = await query(
     'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
@@ -37,27 +41,24 @@ router.get('/conversations/:id/messages', async (req, res) => {
 
   await query('UPDATE conversations SET unread_count = 0 WHERE id = $1', [req.params.id]);
 
-  const { rows } = await query(
-    `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, media_url, created_at AS time
-     FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
-    [req.params.id]
-  );
-  res.json({ messages: rows });
-});
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
+  const before = req.query.before;
 
-// GET delivery status of a single message
-router.get('/messages/:id', async (req, res) => {
-  const { rows } = await query(
-    `SELECT m.id, m.status, m.message_sid, m.delivered_at, m.scheduled_at, m.error, m.cost,
-            p.name AS provider_name
-     FROM messages m
-     JOIN conversations c ON c.id = m.conversation_id
-     LEFT JOIN providers p ON p.id = m.provider_id
-     WHERE m.id = $1 AND c.user_id = $2`,
-    [req.params.id, req.user.id]
-  );
-  if (!rows.length) return res.status(404).json({ error: 'Message not found' });
-  res.json({ message: rows[0] });
+  const params = [req.params.id];
+  let sql = `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, media_url, created_at AS time
+             FROM messages WHERE conversation_id = $1`;
+  if (before) {
+    params.push(before);
+    sql += ` AND created_at < $${params.length}::timestamptz`;
+  }
+  sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+  params.push(limit + 1);
+
+  const { rows } = await query(sql, params);
+  const hasMore = rows.length > limit;
+  const out = rows.slice(0, limit).reverse(); // oldest -> newest
+
+  res.json({ messages: out, hasMore, limit });
 });
 
 // List scheduled messages for current user
@@ -180,9 +181,15 @@ router.post('/send', async (req, res) => {
     const { rows: msg } = await query(
       `INSERT INTO messages (conversation_id, direction, body, status, cost, media_url)
        SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079), $3
-       RETURNING id`,
+       RETURNING id, created_at`,
       [conversationId, body, media_url || null]
     );
+
+    publishRealtime(req.user.id, {
+      type: 'message.created',
+      conversationId,
+      message: { id: msg[0].id, direction: 'out', body, status: 'pending', media_url: media_url || null, created_at: msg[0].created_at },
+    });
 
     const result = await sendNow({
       userId: req.user.id,
@@ -215,11 +222,19 @@ router.post('/send', async (req, res) => {
     }
 
     if (conversationId && body) {
-      await query(
+      const { rows: failedMsg } = await query(
         `UPDATE messages SET status = 'failed', error = $2
-         WHERE conversation_id = $1 AND direction = 'out' AND status = 'pending'`,
+         WHERE conversation_id = $1 AND direction = 'out' AND status = 'pending'
+         RETURNING id`,
         [conversationId, err.message]
       );
+      if (failedMsg.length) {
+        publishRealtime(req.user.id, {
+          type: 'message.updated',
+          conversationId,
+          message: { id: failedMsg[0].id, status: 'failed', error: err.message },
+        });
+      }
     }
     res.status(500).json({ error: err.message || 'Failed to send SMS' });
   }
@@ -306,9 +321,14 @@ router.post('/blast', async (req, res) => {
         const { rows: msg } = await query(
           `INSERT INTO messages (conversation_id, direction, body, status, cost, media_url)
            SELECT $1, 'out', $2, 'pending', COALESCE((SELECT (value->>'rate')::numeric FROM settings WHERE key = 'sms_rate'), 0.0079), $3
-           RETURNING id`,
+           RETURNING id, created_at`,
           [conversationId, body, media_url || null]
         );
+        publishRealtime(req.user.id, {
+          type: 'message.created',
+          conversationId,
+          message: { id: msg[0].id, direction: 'out', body, status: 'pending', media_url: media_url || null, created_at: msg[0].created_at },
+        });
         const r = await sendNow({ userId: req.user.id, numberId: numberRows[0].id, conversationId, contactNumber: contact, body, messageId: msg[0].id, mediaUrl: media_url || null });
         sent++;
         results.push({ to: contact, status: 'sent', messageId: r.messageId });
@@ -320,6 +340,39 @@ router.post('/blast', async (req, res) => {
   }
 
   res.status(201).json({ total: recipients.length, sent, scheduled, failed, results });
+});
+
+// GET delivery status of a single message (registered last so literal
+// routes like /conversations, /scheduled, /analytics match first)
+router.get('/:id', async (req, res) => {
+  const { rows } = await query(
+    `SELECT m.id, m.status, m.message_sid, m.delivered_at, m.scheduled_at, m.error, m.cost,
+            p.name AS provider_name
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     LEFT JOIN providers p ON p.id = m.provider_id
+     WHERE m.id = $1 AND c.user_id = $2`,
+    [req.params.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+  res.json({ message: rows[0] });
+});
+
+// DELETE a single message (hard delete) owned by the current user
+router.delete('/:id', async (req, res) => {
+  const { rows } = await query(
+    `DELETE FROM messages m USING conversations c
+     WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2
+     RETURNING m.id, m.conversation_id`,
+    [req.params.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+  publishRealtime(req.user.id, {
+    type: 'message.deleted',
+    conversationId: rows[0].conversation_id,
+    message: { id: rows[0].id },
+  });
+  res.json({ ok: true });
 });
 
 export default router;

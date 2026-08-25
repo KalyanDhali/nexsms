@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import Avatar from './Avatar.jsx';
 
@@ -30,7 +31,7 @@ export function StatusTicks({ status, className = '' }) {
   );
 }
 
-export default function ConversationItem({ thread, active, onClick }) {
+function ConversationItem({ thread, active, onSelect }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
@@ -38,7 +39,7 @@ export default function ConversationItem({ thread, active, onClick }) {
 
   return (
     <button
-      onClick={onClick}
+      onClick={() => onSelect(thread.id)}
       className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition border-b border-slate-100 dark:border-slate-800 group min-h-[68px] ${
         active
           ? 'bg-primary/[0.06] hover:bg-primary/[0.09]'
@@ -79,3 +80,5 @@ export default function ConversationItem({ thread, active, onClick }) {
     </button>
   );
 }
+
+export default memo(ConversationItem);

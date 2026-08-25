@@ -1,5 +1,6 @@
 import { query } from '../models/db.js';
 import { sendNow } from './messageService.js';
+import { publishRealtime } from './realtime.js';
 
 /**
  * Background scheduler that delivers scheduled SMS.
@@ -97,6 +98,11 @@ async function runScheduledMessages() {
         `UPDATE messages SET status = 'failed', error = $2 WHERE id = $1`,
         [msg.id, err.message]
       );
+      publishRealtime(msg.user_id, {
+        type: 'message.updated',
+        conversationId: msg.conversation_id,
+        message: { id: msg.id, status: 'failed', error: err.message },
+      });
     }
   }
 }

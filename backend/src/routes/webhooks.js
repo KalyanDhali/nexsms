@@ -3,6 +3,7 @@ import { query } from '../models/db.js';
 import { getProviderAdapter } from '../adapters/index.js';
 import { categorizeMessage, findAutoReply } from '../services/aiEngine.js';
 import { fireWebhook } from '../services/webhookDelivery.js';
+import { publishRealtime, publishInboundMessage } from '../services/realtime.js';
 
 const router = Router();
 
@@ -76,10 +77,12 @@ async function handleInboundMessage({ providerId, to, from, body, sid }) {
     conversationId = created[0].id;
   }
 
-  await query(
+  const category = categorizeMessage(body);
+  const { rows: msgRows } = await query(
     `INSERT INTO messages (conversation_id, direction, body, status, provider_id, message_sid, category)
-     VALUES ($1, 'in', $2, 'received', $3, $4, $5)`,
-    [conversationId, body, providerId, sid, categorizeMessage(body)]
+     VALUES ($1, 'in', $2, 'received', $3, $4, $5)
+     RETURNING id, created_at`,
+    [conversationId, body, providerId, sid, category]
   );
 
   await query(
@@ -94,6 +97,18 @@ async function handleInboundMessage({ providerId, to, from, body, sid }) {
     body,
     conversationId,
     messageSid: sid,
+  });
+
+  // Push the inbound message to connected dashboards in real time
+  publishInboundMessage({
+    userId: number.assigned_user_id,
+    conversationId,
+    from,
+    to,
+    messageId: msgRows[0].id,
+    body,
+    category,
+    createdAt: msgRows[0].created_at,
   });
 
   // Smart auto-reply (config-driven, gated by ai_features toggle)
@@ -151,6 +166,16 @@ async function handleStatusUpdate({ sid, status, error }) {
     );
     if (conv.length) {
       fireWebhook(conv[0].user_id, mapped, { sid, messageId: updated[0].id, status: mapped, error: error || null });
+      publishRealtime(conv[0].user_id, {
+        type: 'message.updated',
+        conversationId: updated[0].conversation_id,
+        message: {
+          id: updated[0].id,
+          status: mapped,
+          delivered_at: mapped === 'delivered' ? new Date().toISOString() : undefined,
+          error: mapped === 'failed' ? (error || null) : undefined,
+        },
+      });
     }
   }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useDarkMode } from '../context/DarkModeContext.jsx';
 import { getMyNumbers, getConversations, getConversationMessages, sendSms } from '../services/api.js';
@@ -15,6 +16,7 @@ import ContactsPanel from '../components/chat/ContactsPanel.jsx';
 import MobileBottomNav from '../components/chat/MobileBottomNav.jsx';
 import ContactDetailsPanel from '../components/chat/ContactDetailsPanel.jsx';
 import SenderNumberSheet from '../components/chat/SenderNumberSheet.jsx';
+import MobileSearchOverlay from '../components/chat/MobileSearchOverlay.jsx';
 import SettingsView from '../components/chat/SettingsView.jsx';
 import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
@@ -55,6 +57,7 @@ const mapMessage = (m) => ({
   status: m.status,
   error: m.error,
   time: formatTime(m.time || m.created_at),
+  ts: m.time || m.created_at,
 });
 
 export default function DashboardPage() {
@@ -64,12 +67,18 @@ export default function DashboardPage() {
   const T = (en, zh) => (isZh ? zh : en);
   const { theme } = useTheme();
   const { dark, setDark } = useDarkMode();
+  const toast = useToast();
 
   const [threads, setThreads] = useState([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsError, setThreadsError] = useState('');
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState('');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [dialInput, setDialInput] = useState('');
   const [fromNumber, setFromNumber] = useState('');
   const [fromNumberId, setFromNumberId] = useState('');
@@ -94,6 +103,21 @@ export default function DashboardPage() {
   const threadsRef = useRef([]);
   const activeIdRef = useRef(null);
   const convsRef = useRef([]);
+  const hasMoreRef = useRef({});
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
+
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
 
   useEffect(() => {
     threadsRef.current = threads;
@@ -121,24 +145,74 @@ export default function DashboardPage() {
       const { data } = await getConversations();
       convsRef.current = data.conversations;
       setThreads(data.conversations.map((c) => buildThread(c)));
+      setThreadsError('');
     } catch {
-      /* offline */
+      setThreadsError('failed');
+    } finally {
+      setThreadsLoading(false);
     }
+  };
+
+  const mergeLatestIntoCache = (id, mapped) => {
+    const cur = msgsCache.current[id] || [];
+    const freshIds = new Set(mapped.map((m) => m.id));
+    const freshOutBodies = new Set(mapped.filter((m) => m.direction === 'out').map((m) => m.body));
+    const older = cur.filter(
+      (m) => !freshIds.has(m.id) && !(m.id.startsWith('tmp-') && freshOutBodies.has(m.body))
+    );
+    return [...older, ...mapped].sort((a, b) => ((a.ts || '') < (b.ts || '') ? -1 : 1));
   };
 
   const loadMessages = async (id, silent = false) => {
     if (!silent) setMessagesLoading(true);
     try {
-      const { data } = await getConversationMessages(id);
+      const { data } = await getConversationMessages(id, { limit: 100 });
       const mapped = (data.messages || []).map(mapMessage);
-      msgsCache.current[id] = mapped;
-      if (id === activeIdRef.current) setMessages(mapped);
+      hasMoreRef.current[id] = Boolean(data.hasMore);
+      const merged = silent ? mergeLatestIntoCache(id, mapped) : mapped;
+      msgsCache.current[id] = merged;
+      if (id === activeIdRef.current) {
+        setMessages(merged);
+        setHasMore(Boolean(data.hasMore));
+      }
       const conv = convsRef.current.find((c) => c.id === id);
-      if (conv) setThreads((prev) => prev.map((t) => (t.id === id ? buildThread(conv, mapped) : t)));
+      if (conv) setThreads((prev) => prev.map((t) => (t.id === id ? buildThread(conv, merged) : t)));
+      setMessagesError('');
+    } catch {
+      setMessagesError('failed');
+    } finally {
+      if (!silent) setMessagesLoading(false);
+    }
+  };
+
+  const loadOlderMessages = async (id) => {
+    if (olderLoading || !hasMoreRef.current[id]) return;
+    const cache = msgsCache.current[id] || [];
+    const before = cache[0]?.ts;
+    if (!before) return;
+    setOlderLoading(true);
+    try {
+      const { data } = await getConversationMessages(id, { limit: 100, before });
+      if (!data.messages.length) {
+        hasMoreRef.current[id] = false;
+        if (id === activeIdRef.current) setHasMore(false);
+        return;
+      }
+      const mapped = (data.messages || []).map(mapMessage);
+      const existing = new Set(msgsCache.current[id].map((m) => m.id));
+      const older = mapped.filter((m) => !existing.has(m.id));
+      const merged = [...older, ...msgsCache.current[id]].sort((a, b) => ((a.ts || '') < (b.ts || '') ? -1 : 1));
+      msgsCache.current[id] = merged;
+      hasMoreRef.current[id] = Boolean(data.hasMore);
+      if (id === activeIdRef.current) {
+        setMessages(merged);
+        setHasMore(Boolean(data.hasMore));
+      }
+      setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, messages: merged } : t)));
     } catch {
       /* offline */
     } finally {
-      if (!silent) setMessagesLoading(false);
+      setOlderLoading(false);
     }
   };
 
@@ -153,6 +227,169 @@ export default function DashboardPage() {
       if (activeIdRef.current) loadMessages(activeIdRef.current, true);
     }, 15000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const findMsgInCache = (id) => {
+    for (const convId of Object.keys(msgsCache.current)) {
+      const idx = (msgsCache.current[convId] || []).findIndex((m) => m.id === id);
+      if (idx !== -1) return { convId, idx };
+    }
+    return null;
+  };
+
+  const bumpThread = (id, patch) => {
+    setThreads((prev) => {
+      const list = prev.slice();
+      const idx = list.findIndex((t) => t.id === id);
+      if (idx === -1) return list;
+      list[idx] = { ...list[idx], ...patch };
+      if (idx === 0) return list;
+      const [t] = list.splice(idx, 1);
+      list.unshift(t);
+      return list;
+    });
+  };
+
+  const applyStatusPatch = (event) => {
+    const { conversationId, message } = event;
+    const found = findMsgInCache(message.id);
+    if (!found) return;
+    const { convId, idx } = found;
+    const cur = (msgsCache.current[convId] || []).slice();
+    cur[idx] = { ...cur[idx], ...message, time: cur[idx].time };
+    msgsCache.current[convId] = cur;
+    if (convId === activeIdRef.current) setMessages(cur);
+    setThreads((prev) => prev.map((t) => (t.id === convId ? { ...t, messages: cur } : t)));
+  };
+
+  const applyCreatedMessage = (event) => {
+    const { conversationId, message } = event;
+    if (findMsgInCache(message.id)) return;
+    const cur = (msgsCache.current[conversationId] || []).slice();
+    const isOut = message.direction === 'out';
+
+    if (isOut) {
+      // Reconcile with an optimistic pending message (temp id or retry-in-flight)
+      // that has the same body/media so realtime never duplicates our own sends.
+      for (let i = cur.length - 1; i >= 0; i--) {
+        const m = cur[i];
+        if (m.status === 'pending' && m.body === message.body && (m.mediaUrl || null) === (message.media_url || null)) {
+          cur[i] = { ...m, id: message.id, time: formatTime(message.created_at) };
+          msgsCache.current[conversationId] = cur;
+          if (conversationId === activeIdRef.current) setMessages(cur);
+          bumpThread(conversationId, { messages: cur, preview: message.body || cur[i].body, lastDirection: 'out', time: 'Now' });
+          return;
+        }
+      }
+    }
+
+    const mapped = {
+      id: message.id,
+      direction: message.direction,
+      body: message.body,
+      mediaUrl: message.media_url || null,
+      status: message.status,
+      error: message.error || '',
+      time: formatTime(message.created_at || message.time),
+    };
+    const merged = [...cur, mapped];
+    msgsCache.current[conversationId] = merged;
+    if (conversationId === activeIdRef.current) setMessages(merged);
+    bumpThread(conversationId, { messages: merged, preview: message.body || mapped.body, lastDirection: message.direction, time: 'Now' });
+  };
+
+  const applyInboundMessage = (event) => {
+    const { conversationId, message } = event;
+    if (findMsgInCache(message.id)) {
+      if (conversationId !== activeIdRef.current) {
+        bumpThread(conversationId, { unread: (threadsRef.current.find((t) => t.id === conversationId)?.unread || 0) + 1 });
+      }
+      return;
+    }
+    const cur = (msgsCache.current[conversationId] || []).slice();
+    const mapped = {
+      id: message.id,
+      direction: 'in',
+      body: message.body,
+      mediaUrl: message.media_url || null,
+      status: 'received',
+      error: '',
+      time: formatTime(message.created_at),
+    };
+    const merged = [...cur, mapped];
+    msgsCache.current[conversationId] = merged;
+    const isActive = conversationId === activeIdRef.current;
+    if (isActive) setMessages(merged);
+    bumpThread(conversationId, {
+      messages: merged,
+      preview: message.body || mapped.body,
+      lastDirection: 'in',
+      time: 'Now',
+      unread: isActive ? 0 : (threadsRef.current.find((t) => t.id === conversationId)?.unread || 0) + 1,
+    });
+  };
+
+  const handleRealtimeEvent = (event) => {
+    if (!event || !event.type) return;
+    if (event.type === 'message.new') applyInboundMessage(event);
+    else if (event.type === 'message.created') applyCreatedMessage(event);
+    else if (event.type === 'message.updated') applyStatusPatch(event);
+    else if (event.type === 'message.deleted') applyDeletedMessage(event);
+  };
+
+  const removeMessage = (id) => {
+    for (const convId of Object.keys(msgsCache.current)) {
+      const idx = (msgsCache.current[convId] || []).findIndex((m) => m.id === id);
+      if (idx !== -1) {
+        const cur = msgsCache.current[convId].slice();
+        cur.splice(idx, 1);
+        msgsCache.current[convId] = cur;
+        if (convId === activeIdRef.current) setMessages(cur);
+        setThreads((prev) => prev.map((t) => (t.id === convId ? { ...t, messages: cur } : t)));
+        return;
+      }
+    }
+  };
+
+  const applyDeletedMessage = (event) => {
+    removeMessage(event.message?.id);
+  };
+
+  useEffect(() => {
+    let es = null;
+    let retryTimer = null;
+    let stopped = false;
+
+    const connect = () => {
+      const token = localStorage.getItem('nexsms_access_token');
+      if (!token || stopped) return;
+      try {
+        es = new EventSource(`/api/realtime/events?token=${encodeURIComponent(token)}`);
+      } catch {
+        retryTimer = setTimeout(connect, 5000);
+        return;
+      }
+      es.onmessage = (e) => {
+        try {
+          handleRealtimeEvent(JSON.parse(e.data));
+        } catch {
+          /* malformed frame */
+        }
+      };
+      es.onerror = () => {
+        if (stopped) return;
+        es.close();
+        retryTimer = setTimeout(connect, 5000);
+      };
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (es) es.close();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -206,9 +443,11 @@ export default function DashboardPage() {
     try {
       const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body, mediaUrl });
       patchMsg(conv.id, tmpId, { status: data.status || 'sent', id: data.messageId || tmpId });
-    } catch (err) {
-      const errMsg = err.response?.data?.error || 'Failed to send';
-      patchMsg(conv.id, tmpId, { status: 'failed', error: errMsg });
+      if (data.status === 'failed') toast(T('Message could not be sent', '消息发送失败'), 'error');
+      else toast(T('Message sent', '消息已发送'), 'success');
+    } catch {
+      patchMsg(conv.id, tmpId, { status: 'failed', error: 'Failed to send' });
+      toast(T('Message could not be sent', '消息发送失败'), 'error');
     }
     refreshConversations();
   };
@@ -220,8 +459,11 @@ export default function DashboardPage() {
     try {
       const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body: msg.body, mediaUrl: msg.mediaUrl });
       patchMsg(conv.id, msg.id, { status: data.status || 'sent', id: data.messageId || msg.id });
-    } catch (err) {
-      patchMsg(conv.id, msg.id, { status: 'failed', error: err.response?.data?.error || 'Failed to send' });
+      if (data.status === 'failed') toast(T('Message could not be sent', '消息发送失败'), 'error');
+      else toast(T('Message sent', '消息已发送'), 'success');
+    } catch {
+      patchMsg(conv.id, msg.id, { status: 'failed', error: 'Failed to send' });
+      toast(T('Message could not be sent', '消息发送失败'), 'error');
     }
     refreshConversations();
   };
@@ -233,6 +475,7 @@ export default function DashboardPage() {
       return;
     }
     const next = [...threadsRef.current];
+    let failedCount = 0;
     for (let i = 0; i < recipients.length; i++) {
       const r = recipients[i];
       let data;
@@ -243,6 +486,7 @@ export default function DashboardPage() {
       } catch {
         data = {};
       }
+      if (!ok || data.status === 'failed') failedCount++;
       const msg = {
         id: data.messageId || `tmp-${Date.now()}-${r}`,
         direction: 'out',
@@ -289,6 +533,12 @@ export default function DashboardPage() {
     setComposing(false);
     setDialInput('');
     setSearch('');
+    setSearchInput('');
+    if (failedCount === 0) {
+      toast(T('Message sent', '消息已发送'), 'success');
+    } else {
+      toast(T('Some messages could not be sent', '部分消息发送失败'), 'error');
+    }
     if (isMobile) {
       setMobileView('thread');
       setKeypadOpen(false);
@@ -300,6 +550,7 @@ export default function DashboardPage() {
     setActiveId(id);
     activeIdRef.current = id;
     setComposing(false);
+    setMessagesError('');
     const cached = msgsCache.current[id];
     setMessages(cached || []);
     loadMessages(id, Boolean(cached));
@@ -321,6 +572,7 @@ export default function DashboardPage() {
     setComposing(true);
     setDialInput('');
     setSearch('');
+    setSearchInput('');
     if (isMobile) setMobileView('thread');
     setBnav('home');
   };
@@ -335,6 +587,7 @@ export default function DashboardPage() {
     setComposing(true);
     setDialInput(contact || '');
     setSearch('');
+    setSearchInput('');
     if (isMobile) {
       setMobileView('thread');
       setKeypadOpen(false);
@@ -365,6 +618,7 @@ export default function DashboardPage() {
     setFromNumberId(n.id);
     localStorage.setItem('nexsms_last_from_number', n.id);
     setSenderSheetOpen(false);
+    toast(T('From number changed', '发送号码已更改'), 'success');
   };
 
   const handleFromNumberChange = (num) => {
@@ -378,6 +632,11 @@ export default function DashboardPage() {
 
   const onKey = (digit) => setDialInput((d) => d + digit);
   const onBackspace = () => setDialInput((d) => d.slice(0, -1));
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 120);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const listFilter = search.trim() || dialInput.trim();
   const filtered = threads.filter((th) =>
@@ -450,6 +709,10 @@ export default function DashboardPage() {
           activeId={activeId}
           onSelect={selectThread}
           onNew={openComposer}
+          query={search}
+          loading={threadsLoading}
+          error={!!threadsError}
+          onRetry={refreshConversations}
           hidden={isMobile && mobileView === 'thread'}
         />
       ) : nav === 'calls' ? (
@@ -474,6 +737,13 @@ export default function DashboardPage() {
           onMobileBack={handleMobileBack}
           onOpenDetails={openDetails}
           onPickSender={() => setSenderSheetOpen(true)}
+          hasMore={hasMore}
+          olderLoading={olderLoading}
+          onLoadOlder={loadOlderMessages}
+          messagesLoading={messagesLoading}
+          messagesError={!!messagesError}
+          onRetryMessages={() => activeId && loadMessages(activeId)}
+          onDeleteMessage={removeMessage}
           hidden={isMobile && mobileView === 'list'}
         />
       ) : (
@@ -538,17 +808,50 @@ export default function DashboardPage() {
         <span className="font-semibold text-slate-900 dark:text-white hidden md:block">{theme.siteName}</span>
 
         <div className="flex-1 flex justify-center px-2 min-w-0">
-          <div className="w-full max-w-xl flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/40 border border-transparent focus-within:border-primary transition">
+          <button
+            onClick={() => {
+              setSearchInput(search);
+              setSearchOpen(true);
+            }}
+            className="md:hidden w-11 h-11 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+            title={T('Search', '搜索')}
+            aria-label={T('Search', '搜索')}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+          <div className="hidden md:flex w-full max-w-xl items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/40 border border-transparent focus-within:border-primary transition">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder={T('Search conversations', '搜索对话')}
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-800 dark:text-slate-100 min-w-0"
             />
+            {searchInput !== search && (
+              <span className="block w-3.5 h-3.5 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin shrink-0" aria-label={T('Searching', '搜索中')} />
+            )}
+            {searchInput && (
+              <button
+                onClick={() => {
+                  setSearchInput('');
+                  setSearch('');
+                }}
+                className="w-6 h-6 shrink-0 rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition"
+                title={T('Clear', '清除')}
+                aria-label={T('Clear search', '清除搜索')}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -614,6 +917,27 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {offline && (
+        <div
+          role="status"
+          data-testid="offline-banner"
+          className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-b border-amber-200 dark:border-amber-800 shrink-0"
+        >
+          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="1" y1="1" x2="23" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+            <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" y1="20" x2="12.01" y2="20" />
+          </svg>
+          {T("You're offline", '当前离线')}
+          <span className="opacity-80">·</span>
+          <span className="opacity-90">{T('messages will be sent once back online', '恢复联网后消息将自动发送')}</span>
+        </div>
+      )}
+
       <div className="hidden md:flex h-11 border-b border-slate-200 dark:border-slate-800 items-center px-4 gap-1 bg-white dark:bg-slate-900 overflow-x-auto no-scrollbar shrink-0">
         {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
           <button
@@ -669,6 +993,15 @@ export default function DashboardPage() {
         fromNumber={fromNumber}
         onClose={() => setSenderSheetOpen(false)}
         onSelect={selectSenderNumber}
+      />
+
+      <MobileSearchOverlay
+        open={searchOpen}
+        query={searchInput}
+        onQueryChange={setSearchInput}
+        threads={filtered}
+        onSelect={selectThread}
+        onClose={() => setSearchOpen(false)}
       />
 
       {isMobile && mobileView === 'details' && active && (

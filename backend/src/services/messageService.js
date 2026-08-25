@@ -2,6 +2,7 @@ import { query } from '../models/db.js';
 import { sendSmsWithFailover } from './providerService.js';
 import { requireKyc } from './kycService.js';
 import { fireWebhook } from './webhookDelivery.js';
+import { publishRealtime } from './realtime.js';
 
 /**
  * Shared messaging core — used by the send route and the scheduler
@@ -200,6 +201,11 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
   await incrementDailyCount(numberId);
 
   fireWebhook(userId, 'sent', { messageId, sid: result.sid, from: number.number, to: contactNumber, status: 'sent', cost, payFrom });
+  publishRealtime(userId, {
+    type: 'message.updated',
+    conversationId,
+    message: { id: messageId, status: 'sent', sid: result.sid, providerName: result.providerName, cost, payFrom },
+  });
 
   return { messageId, sid: result.sid, providerName: result.providerName, cost, status: 'sent', tried: result.tried, payFrom };
 }

@@ -18,6 +18,7 @@ import templateRoutes from './routes/templates.js';
 import aiRoutes from './routes/ai.js';
 import userWebhookRoutes from './routes/userWebhooks.js';
 import uploadRoutes from './routes/uploads.js';
+import realtimeRoutes from './routes/realtime.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -58,6 +59,7 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/user-webhooks', userWebhookRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/realtime', realtimeRoutes);
 app.use('/api/media', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Public landing-page stats

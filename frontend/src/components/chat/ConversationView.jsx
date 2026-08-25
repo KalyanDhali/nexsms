@@ -1,13 +1,27 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
-import { uploadSmsImage } from '../../services/api.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { uploadSmsImage, getMessageDetails, deleteMessage } from '../../services/api.js';
 
+import BottomSheet from './BottomSheet.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import Avatar from './Avatar.jsx';
 
 const MAX_RECIPIENTS = 5;
 const MAX_COMPOSE_HEIGHT = 120;
+const BOTTOM_THRESHOLD = 80;
+
+const STATUS_LABEL = {
+  pending: ['Sending…', '发送中…'],
+  sent: ['Sent', '已发送'],
+  delivered: ['Delivered', '已送达'],
+  received: ['Received', '已收到'],
+  read: ['Read', '已读'],
+  scheduled: ['Scheduled', '已定时'],
+  failed: ['Failed', '发送失败'],
+  cancelled: ['Cancelled', '已取消'],
+};
 
 export default function ConversationView({
   thread,
@@ -23,39 +37,125 @@ export default function ConversationView({
   onMobileBack,
   onOpenDetails,
   onPickSender,
+  hasMore,
+  olderLoading,
+  onLoadOlder,
+  messagesLoading,
+  messagesError = false,
+  onRetryMessages,
+  onDeleteMessage,
   hidden,
 }) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
+  const toast = useToast();
   const [draft, setDraft] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
-  const [attachMenu, setAttachMenu] = useState('closed');
+  const [pendingUrl, setPendingUrl] = useState('');
+  const draftRef = useRef('');
+  const draftKeyRef = useRef(null);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [sending, setSending] = useState(false);
   const [recipients, setRecipients] = useState([]);
   const [toFocused, setToFocused] = useState(false);
   const [lightbox, setLightbox] = useState(null);
-  const [menuFor, setMenuFor] = useState(null);
+  const [kbInset, setKbInset] = useState(0);
+
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      const lh = window.innerHeight || vv.height;
+      const inset = Math.max(0, lh - vv.height);
+      setKbInset(inset > 80 ? inset : 0);
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [showNewChip, setShowNewChip] = useState(false);
+  const [actionsFor, setActionsFor] = useState(null);
+  const [detailsFor, setDetailsFor] = useState(null);
+  const [detailsData, setDetailsData] = useState(null);
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const fileInputRef = useRef(null);
-  const bottomRef = useRef(null);
   const composerRef = useRef(null);
   const emojiRef = useRef(null);
   const textareaRef = useRef(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [thread?.messages?.length, sending]);
+  const scrollRef = useRef(null);
+  const stickRef = useRef(true);
+  const prevHeightRef = useRef(0);
+  const prevLenRef = useRef(0);
+  const prevThreadIdRef = useRef(null);
+  const unseenRef = useRef(0);
+  const loadingOlderRef = useRef(false);
+  const pressTimer = useRef(null);
+  const longPressedRef = useRef(false);
 
   useEffect(() => {
     if (!composing) setRecipients([]);
   }, [composing]);
 
+  const draftKey = thread ? `nexsms_draft_thread_${thread.id}` : composing ? 'nexsms_draft_compose' : null;
+
+  useEffect(() => {
+    const prev = draftKeyRef.current;
+    if (prev && prev !== draftKey) {
+      try {
+        if (draftRef.current) localStorage.setItem(prev, draftRef.current);
+        else localStorage.removeItem(prev);
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    draftKeyRef.current = draftKey;
+    if (!draftKey) return;
+    let saved = '';
+    try {
+      saved = localStorage.getItem(draftKey) || '';
+    } catch {
+      /* storage unavailable */
+    }
+    setDraft(saved);
+    setMediaUrl('');
+    if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+    setPendingUrl('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+    if (!draftKey) return;
+    if (!draft) {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* storage unavailable */
+      }
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, draft);
+      } catch {
+        /* storage unavailable */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [draft, draftKey]);
+
   useEffect(() => {
     if (!composing) return;
     const handler = (e) => {
+      if (e.target.closest('[role="dialog"]')) return;
       if (composerRef.current && !composerRef.current.contains(e.target)) {
         onCloseComposer();
       }
@@ -63,13 +163,6 @@ export default function ConversationView({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [composing, onCloseComposer]);
-
-  useEffect(() => {
-    if (!menuFor) return;
-    const handler = () => setMenuFor(null);
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuFor]);
 
   useEffect(() => {
     if (!emojiOpen) return;
@@ -82,11 +175,145 @@ export default function ConversationView({
     return () => document.removeEventListener('mousedown', handler);
   }, [emojiOpen]);
 
+  const openActions = (msg) => {
+    setDeleteArmed(false);
+    setActionsFor(msg);
+  };
+
+  const closeActions = () => {
+    setDeleteArmed(false);
+    setActionsFor(null);
+  };
+
+  const copyMessage = async (msg) => {
+    const text = msg.body || '';
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      toast(T('Copied', '已复制'), 'success');
+    } catch {
+      toast(T('Copy failed', '复制失败'), 'error');
+    }
+    closeActions();
+  };
+
+  const openDetails = async (msg) => {
+    setDetailsFor(msg);
+    setDetailsData(null);
+    closeActions();
+    try {
+      const { data } = await getMessageDetails(msg.id);
+      setDetailsData(data.message);
+    } catch {
+      setDetailsData({ loadError: true });
+    }
+  };
+
+  const doDelete = async (msg) => {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    try {
+      await deleteMessage(msg.id);
+      if (onDeleteMessage) onDeleteMessage(msg.id);
+      toast(T('Message deleted', '消息已删除'), 'success');
+    } catch {
+      toast(T('Delete failed', '删除失败'), 'error');
+    }
+    setDeleteArmed(false);
+    setActionsFor(null);
+  };
+
+  const bubbleTouchProps = (msg) => ({
+    onContextMenu: (e) => {
+      e.preventDefault();
+      openActions(msg);
+    },
+    onTouchStart: () => {
+      longPressedRef.current = false;
+      pressTimer.current = setTimeout(() => {
+        longPressedRef.current = true;
+        openActions(msg);
+      }, 480);
+    },
+    onTouchMove: () => clearTimeout(pressTimer.current),
+    onTouchEnd: () => clearTimeout(pressTimer.current),
+  });
+
   const autosize = () => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, MAX_COMPOSE_HEIGHT) + 'px';
+  };
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threadChanged = prevThreadIdRef.current !== thread?.id;
+    const prevHeight = prevHeightRef.current;
+    const prevLen = prevLenRef.current;
+    const curLen = thread?.messages?.length || 0;
+    prevHeightRef.current = el.scrollHeight;
+    prevLenRef.current = curLen;
+
+    if (threadChanged) {
+      prevThreadIdRef.current = thread?.id;
+      stickRef.current = true;
+      unseenRef.current = 0;
+      setShowNewChip(false);
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+
+    if (stickRef.current) {
+      if (el.scrollHeight > prevHeight || curLen > prevLen) el.scrollTop = el.scrollHeight;
+    } else if (prevHeight > 0) {
+      // Preserve scroll position when older messages are prepended
+      el.scrollTop += el.scrollHeight - prevHeight;
+      if (curLen > prevLen) {
+        unseenRef.current += curLen - prevLen;
+        setShowNewChip(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread?.messages?.length, thread?.id]);
+
+  useEffect(() => {
+    if (!olderLoading) loadingOlderRef.current = false;
+  }, [olderLoading]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD;
+    stickRef.current = nearBottom;
+    if (nearBottom && unseenRef.current > 0) {
+      unseenRef.current = 0;
+      setShowNewChip(false);
+    }
+    if (el.scrollTop < 40 && hasMore && !olderLoading && !loadingOlderRef.current) {
+      loadingOlderRef.current = true;
+      onLoadOlder && onLoadOlder(thread?.id);
+    }
+  };
+
+  const goToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickRef.current = true;
+    unseenRef.current = 0;
+    setShowNewChip(false);
+    el.scrollTop = el.scrollHeight;
   };
 
   const handleSave = async (url) => {
@@ -118,18 +345,23 @@ export default function ConversationView({
     e.target.value = '';
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      setUploadError(t('chat.imageTooLarge'));
+      setUploadError(T('Image must be 8 MB or smaller', '图片不能超过 8 MB'));
       return;
     }
+    if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+    const url = URL.createObjectURL(file);
+    setPendingUrl(url);
     const reader = new FileReader();
     reader.onload = async () => {
       setUploading(true);
       setUploadError('');
       try {
         const { data } = await uploadSmsImage({ filename: file.name, data: reader.result });
+        URL.revokeObjectURL(url);
+        setPendingUrl('');
         setMediaUrl(data.url);
-      } catch (err) {
-        setUploadError(err.response?.data?.error || 'Upload failed');
+      } catch {
+        setUploadError(T('Upload failed. Please try again', '上传失败，请重试'));
       } finally {
         setUploading(false);
       }
@@ -150,6 +382,8 @@ export default function ConversationView({
     }
     setDraft('');
     setMediaUrl('');
+    if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+    setPendingUrl('');
     requestAnimationFrame(() => {
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     });
@@ -168,6 +402,8 @@ export default function ConversationView({
     }
     setDraft('');
     setMediaUrl('');
+    if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+    setPendingUrl('');
   };
 
   const addRecipient = (num) => {
@@ -212,6 +448,22 @@ export default function ConversationView({
     <span className={`inline-flex items-center gap-1 text-[10px] ${msg.direction === 'out' ? 'text-white/70 dark:text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
       <span>{msg.time}</span>
       {msg.direction === 'out' && msg.status && statusTicks(msg.status)}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          openActions(msg);
+        }}
+        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition -mr-1"
+        title={T('More options', '更多选项')}
+        aria-label={T('More options', '更多选项')}
+      >
+        <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.7" />
+          <circle cx="12" cy="12" r="1.7" />
+          <circle cx="12" cy="19" r="1.7" />
+        </svg>
+      </button>
     </span>
   );
 
@@ -237,23 +489,32 @@ export default function ConversationView({
     const isOut = msg.direction === 'out';
     if (msg.mediaUrl) {
       return (
-        <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`} data-testid="message-bubble" {...bubbleTouchProps(msg)}>
           <div className="max-w-[78%] sm:max-w-[70%]">
             <div className="relative inline-block">
               <img
                 src={msg.mediaUrl}
                 alt=""
-                onClick={() => setLightbox(msg.mediaUrl)}
+                loading="lazy"
+                decoding="async"
+                onClick={() => {
+                  if (longPressedRef.current) {
+                    longPressedRef.current = false;
+                    return;
+                  }
+                  setLightbox(msg.mediaUrl);
+                }}
                 className={`rounded-2xl max-w-[240px] max-h-60 object-cover shadow cursor-zoom-in transition hover:opacity-90 ${isOut ? '' : 'border border-slate-200 dark:border-slate-700'}`}
               />
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setMenuFor(msg.id === menuFor ? null : msg.id);
+                  openActions(msg);
                 }}
-                className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition"
-                title="More options"
-                aria-label="More options"
+                className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition"
+                title={T('More options', '更多选项')}
+                aria-label={T('More options', '更多选项')}
               >
                 <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
                   <circle cx="12" cy="5" r="1.8" />
@@ -261,27 +522,6 @@ export default function ConversationView({
                   <circle cx="12" cy="19" r="1.8" />
                 </svg>
               </button>
-              {menuFor === msg.id && (
-                <div
-                  className="absolute top-9 right-0 z-20 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 w-32"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => {
-                      handleSave(msg.mediaUrl);
-                      setMenuFor(null);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    {T('Save', '保存')}
-                  </button>
-                </div>
-              )}
             </div>
             {msg.body && (
               <div className={`mt-1.5 ${isOut ? 'text-right' : ''}`}>
@@ -303,7 +543,7 @@ export default function ConversationView({
       );
     }
     return (
-      <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}>
+      <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`} data-testid="message-bubble" {...bubbleTouchProps(msg)}>
         <div
           className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
             isOut
@@ -314,8 +554,8 @@ export default function ConversationView({
           <span className="whitespace-pre-wrap break-words">{msg.body}</span>
           <div className={`mt-1 flex items-center gap-1 justify-end`}>{messageMeta(msg)}</div>
           {isOut && msg.status === 'failed' && retryRow(msg)}
-          {isOut && msg.status === 'failed' && msg.error && (
-            <div className="mt-1.5 text-[10px] leading-tight text-rose-500 dark:text-rose-400 truncate max-w-[220px]" title={msg.error}>
+          {isOut && msg.status === 'failed' && (
+            <div className="mt-1.5 text-[10px] leading-tight text-rose-500 dark:text-rose-400 truncate max-w-[220px]">
               {T('Send failed', '发送失败')}
             </div>
           )}
@@ -325,14 +565,41 @@ export default function ConversationView({
   };
 
   const composerBar = (onSubmit, type) => (
-    <form onSubmit={onSubmit} className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      {mediaUrl && (
-        <div className="mb-2 flex items-center">
+    <form
+      onSubmit={onSubmit}
+      className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[padding]"
+      style={kbInset ? { paddingBottom: `calc(0.75rem + ${kbInset}px)` } : undefined}
+    >
+      {(mediaUrl || pendingUrl) && (
+        <div className="mb-2 flex items-center gap-2">
           <div className="relative shrink-0">
-            <img src={mediaUrl} alt="" className="w-20 h-20 rounded-lg border border-slate-200 dark:border-slate-700 object-cover shadow-sm" />
+            <img
+              src={pendingUrl || mediaUrl}
+              alt=""
+              className={`w-20 h-20 rounded-lg border object-cover shadow-sm ${
+                pendingUrl && !mediaUrl && uploadError
+                  ? 'border-rose-400 dark:border-rose-600'
+                  : 'border-slate-200 dark:border-slate-700'
+              } ${pendingUrl && !mediaUrl && !uploadError ? 'opacity-60' : ''}`}
+            />
+            {uploading && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30">
+                <span className="block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-label={T('Uploading', '上传中')} />
+              </span>
+            )}
+            {pendingUrl && !mediaUrl && !uploading && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30 text-[10px] font-semibold text-white">
+                {T('Failed', '失败')}
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => setMediaUrl('')}
+              onClick={() => {
+                if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+                setPendingUrl('');
+                setMediaUrl('');
+                setUploadError('');
+              }}
               className="absolute -top-2 -right-2 bg-slate-600 hover:bg-rose-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer z-10 leading-none"
               title={T('Remove', '移除')}
               aria-label={T('Remove', '移除')}
@@ -348,7 +615,7 @@ export default function ConversationView({
           <button
             type="button"
             onClick={() => {
-              setAttachMenu((v) => (v === 'closed' ? 'main' : 'closed'));
+              setAttachOpen(true);
               setEmojiOpen(false);
             }}
             className="w-11 h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"
@@ -361,32 +628,6 @@ export default function ConversationView({
               <span className="text-2xl leading-none">+</span>
             )}
           </button>
-          {attachMenu !== 'closed' && (
-            <div className="absolute bottom-12 left-0 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-100 dark:border-slate-700 py-1 z-20">
-              <button
-                type="button"
-                onClick={() => {
-                  fileInputRef.current?.click();
-                  setAttachMenu('closed');
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2"
-              >
-                <span className="w-5 text-center text-slate-500 dark:text-slate-400">🖼</span>
-                {T('Photos', '照片')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  fileInputRef.current?.click();
-                  setAttachMenu('closed');
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2"
-              >
-                <span className="w-5 text-center text-slate-500 dark:text-slate-400">↑</span>
-                {T('Upload', '上传')}
-              </button>
-            </div>
-          )}
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
 
@@ -422,7 +663,7 @@ export default function ConversationView({
             type="button"
             onClick={() => {
               setEmojiOpen((v) => !v);
-              if (attachMenu !== 'closed') setAttachMenu('closed');
+              setAttachOpen(false);
             }}
             className="w-11 h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
             title={T('Emoji', '表情')}
@@ -606,16 +847,81 @@ export default function ConversationView({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-3 bg-slate-50 dark:bg-slate-950">
-            {thread.messages.map((msg) => (
-              <div key={msg.id}>{renderBubble(msg)}</div>
-            ))}
-            {thread.messages.length === 0 && (
-              <div className="text-center text-sm text-slate-400 dark:text-slate-500 pt-20">
-                {T('Say hello to', '打个招呼给')} {thread.name}
-              </div>
+          <div className="relative flex-1 min-h-0 flex flex-col">
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              data-testid="thread-scroll"
+              className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-3 bg-slate-50 dark:bg-slate-950 overscroll-contain"
+            >
+              {olderLoading && (
+                <div className="flex justify-center py-2" aria-live="polite">
+                  <span className="block w-5 h-5 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin" />
+                </div>
+              )}
+              {!olderLoading && hasMore && thread.messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onLoadOlder && onLoadOlder(thread.id)}
+                  className="mx-auto block text-xs text-primary dark:text-indigo-300 hover:underline py-1"
+                >
+                  {T('Load older messages', '加载更早的消息')}
+                </button>
+              )}
+              {messagesLoading && thread.messages.length === 0 ? (
+                <div className="space-y-3 pt-4" aria-label="Loading messages" aria-busy="true">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className={`flex ${i % 2 ? 'justify-start' : 'justify-end'}`}>
+                      <div className="h-10 w-40 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                thread.messages.map((msg) => (
+                  <div key={msg.id}>{renderBubble(msg)}</div>
+                ))
+              )}
+              {messagesError && !messagesLoading && (
+                <div className="flex flex-col items-center gap-3 py-10 px-6 text-center" data-testid="messages-error">
+                  <svg viewBox="0 0 24 24" className="w-9 h-9 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M12 9v4m0 4h.01" />
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  </svg>
+                  <p className="text-sm text-slate-400 dark:text-slate-500">{T('Could not load messages', '无法加载消息')}</p>
+                  {onRetryMessages && (
+                    <button
+                      type="button"
+                      onClick={onRetryMessages}
+                      className="min-h-11 px-5 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition flex items-center gap-2"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                      </svg>
+                      {T('Try again', '重试')}
+                    </button>
+                  )}
+                </div>
+              )}
+              {!messagesLoading && !messagesError && thread.messages.length === 0 && (
+                <div className="text-center text-sm text-slate-400 dark:text-slate-500 pt-20">
+                  {T('Say hello to', '打个招呼给')} {thread.name}
+                </div>
+              )}
+            </div>
+            {showNewChip && (
+              <button
+                type="button"
+                onClick={goToBottom}
+                className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3 h-9 rounded-full bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 text-xs font-semibold shadow-lg transition hover:bg-slate-800 dark:hover:bg-white"
+                aria-label={T('New messages', '新消息')}
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                {T('New messages', '新消息')}
+              </button>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {composerBar(submitDraft, 'draft')}
@@ -623,6 +929,168 @@ export default function ConversationView({
       )}
 
       {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} />}
+
+      <BottomSheet open={!!actionsFor} onClose={closeActions} ariaLabel={T('Message actions', '消息操作')}>
+        {actionsFor && (
+          <div className="py-1" data-testid="message-actions">
+            {actionsFor.mediaUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleSave(actionsFor.mediaUrl);
+                  closeActions();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                {T('Save image', '保存图片')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => copyMessage(actionsFor)}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {T('Copy', '复制')}
+            </button>
+            {actionsFor.direction === 'out' && actionsFor.status === 'failed' && onRetry && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRetry(actionsFor);
+                  closeActions();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                {T('Retry', '重试')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => openDetails(actionsFor)}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              {T('Details', '详情')}
+            </button>
+            <button
+              type="button"
+              onClick={() => doDelete(actionsFor)}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition min-h-11 ${
+                deleteArmed
+                  ? 'bg-rose-600 text-white font-semibold'
+                  : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${deleteArmed ? 'text-white' : 'text-rose-500 dark:text-rose-400'}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              {deleteArmed ? T('Tap again to confirm', '再次点击确认删除') : T('Delete', '删除')}
+            </button>
+          </div>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!detailsFor}
+        onClose={() => setDetailsFor(null)}
+        title={T('Message details', '消息详情')}
+        ariaLabel={T('Message details', '消息详情')}
+      >
+        {detailsFor &&
+          (detailsData?.loadError ? (
+            <div className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+              {T('Could not load details', '无法加载详情')}
+            </div>
+          ) : !detailsData ? (
+            <div className="flex justify-center py-8">
+              <span className="block w-6 h-6 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-sm" data-testid="message-details">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <span className="text-slate-400 dark:text-slate-500">{T('Status', '状态')}</span>
+                <span className="font-medium text-right">{T(...(STATUS_LABEL[detailsData.status] || ['—', '—']))}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <span className="text-slate-400 dark:text-slate-500">{T('Time', '时间')}</span>
+                <span className="font-medium text-right">
+                  {detailsFor.ts ? new Date(detailsFor.ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : detailsFor.time}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <span className="text-slate-400 dark:text-slate-500">{T('Direction', '方向')}</span>
+                <span className="font-medium">{detailsFor.direction === 'out' ? T('Outgoing', '发出') : T('Incoming', '收到')}</span>
+              </div>
+              {detailsData.delivered_at && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-slate-400 dark:text-slate-500">{T('Delivered', '已送达')}</span>
+                  <span className="font-medium">{new Date(detailsData.delivered_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+              )}
+              {detailsData.cost != null && Number(detailsData.cost) > 0 && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-slate-400 dark:text-slate-500">{T('Cost', '费用')}</span>
+                  <span className="font-medium">${Number(detailsData.cost).toFixed(4)}</span>
+                </div>
+              )}
+              {detailsData.provider_name && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-slate-400 dark:text-slate-500">{T('Provider', '运营商')}</span>
+                  <span className="font-medium text-right">{detailsData.provider_name}</span>
+                </div>
+              )}
+              {detailsData.message_sid && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-slate-400 dark:text-slate-500">SID</span>
+                  <span className="font-mono text-xs text-right break-all max-w-[60%]">{detailsData.message_sid}</span>
+                </div>
+              )}
+            </div>
+          ))}
+      </BottomSheet>
+
+      <BottomSheet open={attachOpen} onClose={() => setAttachOpen(false)} title={T('Add attachment', '添加附件')} ariaLabel={T('Add attachment', '添加附件')}>
+        <button
+          type="button"
+          onClick={() => {
+            setAttachOpen(false);
+            fileInputRef.current?.click();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition text-left"
+        >
+          <span className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-lg">🖼</span>
+          <span className="text-sm font-medium text-slate-900 dark:text-white">{T('Photos', '照片')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAttachOpen(false);
+            fileInputRef.current?.click();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition text-left"
+        >
+          <span className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-lg">↑</span>
+          <span className="text-sm font-medium text-slate-900 dark:text-white">{T('Upload', '上传')}</span>
+        </button>
+      </BottomSheet>
     </div>
   );
 }
