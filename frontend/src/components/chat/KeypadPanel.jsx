@@ -63,7 +63,7 @@ export default function KeypadPanel({
   }
 
   return (
-    <div className="w-full shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 min-w-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl" data-testid="keypad-panel">
+    <div className="sidebar-right w-full shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 min-w-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl" data-testid="keypad-panel">
       <div className="relative border-b border-gray-200 pt-3 pb-2 px-4 flex items-start gap-2" ref={dropdownRef}>
         <div className="min-w-0 flex-1">
           <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>

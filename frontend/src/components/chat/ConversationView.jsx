@@ -740,7 +740,7 @@ export default function ConversationView({
   );
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 min-w-0" data-testid="conversation-view" style={hidden ? { display: 'none' } : undefined}>
+    <div className="chat-middle flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 min-w-0" data-testid="conversation-view" style={hidden ? { display: 'none' } : undefined}>
       {!thread && composing ? (
         <div ref={composerRef} className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900">
           <div className="relative border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center flex-wrap">
@@ -905,7 +905,7 @@ export default function ConversationView({
               ref={scrollRef}
               onScroll={handleScroll}
               data-testid="thread-scroll"
-              className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-3 bg-slate-50 dark:bg-slate-950 overscroll-contain"
+              className="chat-messages-area flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-3 bg-slate-50 dark:bg-slate-950 overscroll-contain"
             >
               {olderLoading && (
                 <div className="flex justify-center py-2" aria-live="polite">

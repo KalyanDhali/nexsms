@@ -677,11 +677,7 @@ export default function DashboardPage() {
     }
   };
 
-  const chatGridCls = [
-    'chat-grid desktop-min-width flex flex-1 overflow-hidden relative',
-    !isMobile && listCollapsed ? 'no-list' : '',
-    !isMobile && !keypadOpen ? 'no-keypad' : '',
-  ].filter(Boolean).join(' ');
+  const chatGridCls = 'chat-grid desktop-min-width flex flex-1 relative';
 
   const renderChatArea = () => (
     <div className={chatGridCls}>

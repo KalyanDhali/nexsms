@@ -14,9 +14,14 @@
 
 html, body {
   height: 100%;
-  overflow: hidden;
   max-width: 100%;
   overscroll-behavior: none;
+  touch-action: auto !important;
+  /* Clip horizontal overflow so a wide `position:fixed` overlay (e.g. the
+     details sheet) can't expand the mobile layout viewport (ICB) past the
+     device width; vertical page scrolling stays fully natural. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -32,7 +37,7 @@ html.dark body {
 }
 
 #root {
-  height: 100%;
+  min-height: 100%;
   max-width: 100%;
 }
 
@@ -44,65 +49,73 @@ html.dark body {
   scrollbar-width: none;
 }
 
-/* App shell base (phones, width=device-width): a fixed, viewport-pinned
-   grid so the browser shell can't stretch or shift when the touch
-   keyboard opens; the chat panel is the only vertical scroll region. */
-.app-shell {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100dvh;
-  height: -webkit-fill-available;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  min-width: 0;
+/* Inner chat surfaces must be allowed to shrink inside the shell so the
+   messages area / list can scroll internally instead of growing the page. */
+.chat-grid,
+.chat-middle {
+  min-height: 0;
 }
 
-/* Desktop layout (tablets, narrow windows, and phone Desktop Site mode):
-   content enforces a 1000px minimum so the Sidebar / Chat / Dialpad
-   columns never crush into vertical strips; below 1000px the shell
-   scrolls horizontally to reveal the full desktop layout. */
+/* App shell base: normal document flow with native touch behavior. The
+   shell is exactly the screen height so inner surfaces (conversation list,
+   messages) own their own native scrolling; it is NOT pinned (position
+   static) and has no overflow locks, so genuinely taller content still
+   scrolls the page. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  touch-action: auto !important;
+}
+
+/* Desktop columns (tablets, narrow windows, phone Desktop Site mode):
+   a clean flex row. Sidebars keep fixed widths; only the messages area
+   scrolls vertically. Below the 1024px content minimum the page/shell
+   scrolls horizontally instead of collapsing the UI. */
 @media screen and (min-width: 768px) {
-  .app-shell {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
+  .chat-grid {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
   }
   .desktop-min-width {
-    min-width: 1000px;
+    min-width: 1024px;
   }
-  .chat-grid {
-    display: grid;
-    grid-template-columns: 88px minmax(260px, 1fr) minmax(350px, 2fr) minmax(260px, 1fr);
+  .sidebar-left {
+    width: 280px;
+    flex-shrink: 0;
+  }
+  .chat-middle {
+    flex: 1;
+    min-width: 400px;
     min-height: 0;
+    height: 100%;
   }
-  .chat-grid > * {
-    min-width: 0;
-    min-height: 0;
+  .chat-messages-area {
+    flex: 1;
+    overflow-y: auto;
   }
-  .chat-grid.no-list {
-    grid-template-columns: 88px 44px minmax(350px, 2fr) minmax(260px, 1fr);
-  }
-  .chat-grid.no-keypad {
-    grid-template-columns: 88px minmax(260px, 1fr) minmax(350px, 2fr) 44px;
-  }
-  .chat-grid.no-list.no-keypad {
-    grid-template-columns: 88px 44px minmax(350px, 2fr) 44px;
+  .sidebar-right {
+    width: 300px;
+    flex-shrink: 0;
   }
 }
 
-/* Desktop Mode (mobile browser "Desktop site" viewport >=980px): hard
-   lock the canvas so a touch-keyboard pop cannot re-layout, re-scale,
-   or shift the app. JS (window.visualViewport) re-pins scroll in the
-   same situation; touch-action blocks pinch-zoom on the shell. */
+/* Desktop Mode (mobile browsers' "Desktop site", >=980px layout viewport):
+   pin the shell to the viewport height with a 1024px minimum width.
+   Only the messages area scrolls vertically; wider content overflows
+   horizontally via the shell scrollbar. */
 @media screen and (min-width: 980px) {
   .app-shell {
-    right: 0;
-    bottom: 0;
-    width: 100vw;
+    width: 100%;
+    min-width: 1024px;
     height: 100vh;
+    overflow-x: auto;
     overflow-y: hidden;
-    touch-action: pan-x pan-y;
   }
 }
 
