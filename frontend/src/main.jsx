@@ -15,6 +15,22 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
+// Prevent input focus from firing default smooth-scroll shifts (mobile
+// Desktop Site keyboards). Freeze scroll on focus so the browser shell
+// cannot re-render/jump the viewport when the touch keyboard opens.
+document.addEventListener(
+  'focusin',
+  (e) => {
+    const t = e.target;
+    if (t && typeof t.matches === 'function' && t.matches('input, textarea')) {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
+    }
+  },
+  true,
+);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

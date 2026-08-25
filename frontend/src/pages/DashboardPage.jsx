@@ -816,7 +816,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="app-shell fixed top-0 left-0 w-full bg-white dark:bg-slate-900">
+    <div className="app-shell bg-white dark:bg-slate-900">
       <header className="desktop-min-width h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
