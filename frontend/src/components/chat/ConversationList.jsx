@@ -1,13 +1,16 @@
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import Avatar from './Avatar.jsx';
 
-export default function ConversationList({ threads, activeId, onSelect, onNew }) {
+export default function ConversationList({ threads, activeId, onSelect, onNew, hidden }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
 
   return (
-    <aside className="w-[320px] shrink-0 border-r border-slate-200 flex flex-col bg-white">
+    <aside
+      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 flex flex-col bg-white"
+      style={hidden ? { display: 'none' } : undefined}
+    >
       <div className="p-3">
         <button
           onClick={onNew}

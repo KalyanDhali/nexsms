@@ -17,6 +17,17 @@ import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
 import AccountPanel from '../components/AccountPanel.jsx';
 import BlastModal from '../components/BlastModal.jsx';
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = () => setMatches(mql.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
+}
+
 const mockThreads = [
   {
     id: 1,
@@ -87,6 +98,9 @@ export default function DashboardPage() {
   const [composing, setComposing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [navOpen, setNavOpen] = useState(false);
+  const [mobileView, setMobileView] = useState('list');
 
   useEffect(() => {
     getMyNumbers()
@@ -134,6 +148,10 @@ export default function DashboardPage() {
     setComposing(false);
     setDialInput('');
     setSearch('');
+    if (isMobile) {
+      setMobileView('thread');
+      setKeypadOpen(false);
+    }
   };
 
   const composeSend = ({ recipients, body, mediaUrl }) => {
@@ -172,11 +190,19 @@ export default function DashboardPage() {
     setComposing(false);
     setDialInput('');
     setSearch('');
+    if (isMobile) {
+      setMobileView('thread');
+      setKeypadOpen(false);
+    }
   };
 
   const selectThread = (id) => {
     setActiveThread(id);
     setComposing(false);
+    if (isMobile) {
+      setMobileView('thread');
+      setKeypadOpen(false);
+    }
   };
 
   const openComposer = () => {
@@ -184,6 +210,13 @@ export default function DashboardPage() {
     setComposing(true);
     setDialInput('');
     setSearch('');
+    if (isMobile) setMobileView('thread');
+  };
+
+  const handleMobileBack = () => {
+    setMobileView('list');
+    setComposing(false);
+    setKeypadOpen(false);
   };
 
   const onKey = (digit) => setDialInput((d) => d + digit);
@@ -198,19 +231,36 @@ export default function DashboardPage() {
     : [];
 
   const renderChatArea = () => (
-    <div className="flex flex-1 overflow-hidden">
-      <NavSidebar active={nav} onChange={setNav} collapsed={navCollapsed} />
+    <div className="flex flex-1 overflow-hidden relative">
+      {isMobile ? (
+        navOpen && (
+          <NavSidebar
+            active={nav}
+            onChange={(k) => {
+              setNav(k);
+              setNavOpen(false);
+              setMobileView('list');
+            }}
+            collapsed={false}
+            drawer
+            onClose={() => setNavOpen(false)}
+          />
+        )
+      ) : (
+        <NavSidebar active={nav} onChange={setNav} collapsed={navCollapsed} />
+      )}
       {nav === 'messages' ? (
         <ConversationList
           threads={filtered}
           activeId={activeThread}
           onSelect={selectThread}
           onNew={openComposer}
+          hidden={isMobile && mobileView === 'thread'}
         />
       ) : nav === 'calls' ? (
-        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); openComposer(); }} />
+        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); openComposer(); }} hidden={isMobile && mobileView === 'thread'} />
       ) : (
-        <EmptyListPanel kind={nav} />
+        <EmptyListPanel kind={nav} hidden={isMobile && mobileView === 'thread'} />
       )}
       {nav === 'messages' ? (
         <ConversationView
@@ -223,9 +273,11 @@ export default function DashboardPage() {
           fromNumber={fromNumber}
           composing={composing}
           onCloseComposer={() => setComposing(false)}
+          onMobileBack={handleMobileBack}
+          hidden={isMobile && mobileView === 'list'}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-slate-50 text-sm text-slate-400 min-w-0">
+        <div className="flex-1 flex items-center justify-center bg-slate-50 text-sm text-slate-400 min-w-0 hidden md:flex">
           {nav === 'calls' ? T('Call history', '通话记录') : ''}
         </div>
       )}
@@ -253,7 +305,7 @@ export default function DashboardPage() {
     <div className="h-screen flex flex-col bg-white">
       <header className="h-14 border-b border-slate-200 flex items-center gap-3 px-3 bg-white">
         <button
-          onClick={() => setNavCollapsed((v) => !v)}
+          onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
           className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center text-lg transition"
           title="Menu"
         >
@@ -311,12 +363,12 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white">
+      <div className="h-11 border-b border-slate-200 flex items-center px-4 gap-1 bg-white overflow-x-auto">
         {['messages', 'numbers', 'billing', 'api', 'account'].map((key) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition relative ${
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition relative shrink-0 whitespace-nowrap ${
               tab === key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -333,7 +385,7 @@ export default function DashboardPage() {
         {tab === 'messages' && (
           <button
             onClick={() => setBlastOpen(true)}
-            className="ml-auto px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
+            className="ml-auto shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition"
           >
             {isZh ? '批量群发' : 'Bulk blast'}
           </button>

@@ -6,13 +6,16 @@ const META = {
   spam: { en: 'No spam', zh: '暂无垃圾信息', subEn: 'Spam & blocked senders appear here', subZh: '垃圾与已阻止的发件人显示在这里' },
 };
 
-export default function EmptyListPanel({ kind }) {
+export default function EmptyListPanel({ kind, hidden }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   const m = META[kind] || META.archive;
 
   return (
-    <aside className="w-[320px] shrink-0 border-r border-slate-200 bg-white flex flex-col">
+    <aside
+      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 bg-white flex flex-col"
+      style={hidden ? { display: 'none' } : undefined}
+    >
       <div className="px-4 py-3 border-b border-slate-100">
         <span className="text-sm font-medium text-slate-900">{isZh ? m.zh : m.en}</span>
       </div>

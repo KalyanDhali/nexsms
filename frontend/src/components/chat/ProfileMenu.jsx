@@ -100,7 +100,7 @@ export default function ProfileMenu() {
       )}
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-40 overflow-hidden flex flex-col max-h-[calc(100vh-80px)]">
+        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-16px)] bg-white rounded-2xl shadow-2xl border border-gray-200 z-40 overflow-hidden flex flex-col max-h-[calc(100vh-80px)]">
           <div className="overflow-y-auto">
             {/* Identity header */}
             <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">

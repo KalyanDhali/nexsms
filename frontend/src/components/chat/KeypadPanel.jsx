@@ -50,7 +50,7 @@ export default function KeypadPanel({
 
   if (!open) {
     return (
-      <div className="w-11 shrink-0 border-l border-slate-200 bg-white flex items-start justify-center py-4">
+      <div className="w-11 shrink-0 border-l border-slate-200 bg-white hidden md:flex items-start justify-center py-4">
         <button
           onClick={onToggle}
           title={t('chat.showKeypad')}
@@ -63,7 +63,7 @@ export default function KeypadPanel({
   }
 
   return (
-    <div className="w-80 shrink-0 border-l border-gray-200 bg-white h-full flex flex-col justify-between min-h-0">
+    <div className="w-full md:w-80 shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col justify-between min-h-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl">
       <div className="relative border-b border-gray-200 pt-3 pb-2 px-4" ref={dropdownRef}>
         <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>
         <button
@@ -143,7 +143,7 @@ export default function KeypadPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center">
+      <div className="grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center max-md:gap-y-4 max-md:gap-x-3 max-md:px-6 max-md:pt-6 max-md:pb-4">
         {KEYS.map(([digit, letters]) => (
           <button
             key={digit}

@@ -8,13 +8,16 @@ const CALL_LOG = [
   { id: 4, name: '+1 (702) 246-7592', dir: 'out', time: 'Yesterday' },
 ];
 
-export default function CallsPanel({ onPick }) {
+export default function CallsPanel({ onPick, hidden }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
 
   return (
-    <aside className="w-[320px] shrink-0 border-r border-slate-200 bg-white flex flex-col">
+    <aside
+      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 bg-white flex flex-col"
+      style={hidden ? { display: 'none' } : undefined}
+    >
       <div className="px-4 py-3 border-b border-slate-100">
         <span className="text-sm font-medium text-slate-900">{T('Recent calls', '最近通话')}</span>
       </div>

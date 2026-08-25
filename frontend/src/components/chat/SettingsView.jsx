@@ -46,13 +46,13 @@ export default function SettingsView({ fromNumber, balance, onClose }) {
         </button>
         <span className="text-lg font-semibold text-slate-900">Voice Settings</span>
       </div>
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-60 shrink-0 border-r border-slate-200 bg-white py-3">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
+        <aside className="w-full md:w-60 shrink-0 md:border-r border-b md:border-b-0 border-slate-200 bg-white py-3 flex md:flex-col overflow-x-auto">
           {SECTIONS.map((s) => (
             <button
               key={s.key}
               onClick={() => setTab(s.key)}
-              className={`w-full text-left px-5 py-2.5 text-sm transition border-l-[3px] ${
+              className={`whitespace-nowrap shrink-0 w-full text-left px-5 py-2.5 text-sm transition md:border-l-[3px] border-b-2 md:border-b-0 ${
                 tab === s.key
                   ? 'border-blue-600 text-blue-600 bg-blue-50/60 font-medium'
                   : 'border-transparent text-slate-600 hover:bg-slate-50'
@@ -63,7 +63,7 @@ export default function SettingsView({ fromNumber, balance, onClose }) {
           ))}
         </aside>
 
-        <div className="flex-1 overflow-y-auto bg-[#f8f9fa] p-6">
+        <div className="flex-1 overflow-y-auto bg-[#f8f9fa] p-4 md:p-6">
           {tab === 'account' && (
             <div className="max-w-2xl space-y-4">
               <h3 className="text-base font-semibold text-slate-900">{T('Account Info', '账户信息')}</h3>

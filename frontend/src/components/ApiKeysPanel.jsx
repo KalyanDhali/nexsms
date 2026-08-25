@@ -125,38 +125,40 @@ export default function ApiKeysPanel() {
           ) : keys.length === 0 ? (
             <div className="p-4 text-sm text-slate-500">{T('No keys yet. Generate one above.', '暂无密钥，请在上面生成。')}</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-100">
-                  <th className="px-4 py-2 font-medium">{T('Name', '名称')}</th>
-                  <th className="px-4 py-2 font-medium">{T('Key', '密钥')}</th>
-                  <th className="px-4 py-2 font-medium">{T('Last used', '最后使用')}</th>
-                  <th className="px-4 py-2 font-medium">{T('Status', '状态')}</th>
-                  <th className="px-4 py-2 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {keys.map((k) => (
-                  <tr key={k.id} className="border-b border-slate-50">
-                    <td className="px-4 py-2 text-slate-800">{k.name}</td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{k.prefix}••••</td>
-                    <td className="px-4 py-2 text-slate-500 text-xs">{k.last_used_at ? fmtDate(k.last_used_at) : T('Never', '从未')}</td>
-                    <td className="px-4 py-2">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${k.active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                        {k.active ? T('Active', '活跃') : T('Revoked', '已撤销')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {k.active && (
-                        <button onClick={() => doRevoke(k.id)} className="text-xs text-red-500 hover:text-red-700">
-                          {T('Revoke', '撤销')}
-                        </button>
-                      )}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b border-slate-100">
+                    <th className="px-4 py-2 font-medium whitespace-nowrap">{T('Name', '名称')}</th>
+                    <th className="px-4 py-2 font-medium whitespace-nowrap">{T('Key', '密钥')}</th>
+                    <th className="px-4 py-2 font-medium whitespace-nowrap">{T('Last used', '最后使用')}</th>
+                    <th className="px-4 py-2 font-medium whitespace-nowrap">{T('Status', '状态')}</th>
+                    <th className="px-4 py-2 font-medium"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {keys.map((k) => (
+                    <tr key={k.id} className="border-b border-slate-50">
+                      <td className="px-4 py-2 text-slate-800 whitespace-nowrap">{k.name}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-slate-500 whitespace-nowrap">{k.prefix}••••</td>
+                      <td className="px-4 py-2 text-slate-500 text-xs whitespace-nowrap">{k.last_used_at ? fmtDate(k.last_used_at) : T('Never', '从未')}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 text-xs rounded-full ${k.active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                          {k.active ? T('Active', '活跃') : T('Revoked', '已撤销')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {k.active && (
+                          <button onClick={() => doRevoke(k.id)} className="text-xs text-red-500 hover:text-red-700">
+                            {T('Revoke', '撤销')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 

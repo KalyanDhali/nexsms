@@ -34,10 +34,10 @@ const ICONS = {
   ),
 };
 
-export default function NavSidebar({ active, onChange, collapsed }) {
+export default function NavSidebar({ active, onChange, collapsed, drawer, onClose }) {
   const { lang } = useLanguage();
   const isZh = lang === 'zh';
-  if (collapsed) return null;
+  if (!drawer && collapsed) return null;
   const items = [
     { key: 'calls', label: 'Calls', zh: '通话' },
     { key: 'messages', label: 'Messages', zh: '消息' },
@@ -45,23 +45,61 @@ export default function NavSidebar({ active, onChange, collapsed }) {
     { key: 'archive', label: 'Archive', zh: '归档' },
     { key: 'spam', label: 'Spam', zh: '垃圾' },
   ];
+
+  const renderItem = (item) => {
+    const on = active === item.key;
+    if (drawer) {
+      return (
+        <button
+          key={item.key}
+          onClick={() => onChange(item.key)}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+            on ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          {ICONS[item.key]}
+          <span>{isZh ? item.zh : item.label}</span>
+        </button>
+      );
+    }
+    return (
+      <button
+        key={item.key}
+        onClick={() => onChange(item.key)}
+        className={`w-[72px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition ${
+          on ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+        }`}
+      >
+        {ICONS[item.key]}
+        <span className="text-[10px] leading-none">{isZh ? item.zh : item.label}</span>
+      </button>
+    );
+  };
+
+  if (drawer) {
+    return (
+      <div className="fixed inset-0 z-50 md:hidden">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <nav className="absolute left-0 top-0 bottom-0 w-60 max-w-[80vw] bg-white border-r border-slate-200 shadow-xl flex flex-col p-3 gap-1 overflow-y-auto">
+          <div className="flex items-center justify-between px-2 py-2 border-b border-slate-100 mb-2">
+            <span className="font-bold text-slate-900">NexSMS</span>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+          {items.map(renderItem)}
+        </nav>
+      </div>
+    );
+  }
+
   return (
     <nav className="w-[88px] shrink-0 border-r border-slate-200 bg-white flex flex-col items-center pt-3 gap-1">
-      {items.map((item) => {
-        const on = active === item.key;
-        return (
-          <button
-            key={item.key}
-            onClick={() => onChange(item.key)}
-            className={`w-[72px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition ${
-              on ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            {ICONS[item.key]}
-            <span className="text-[10px] leading-none">{isZh ? item.zh : item.label}</span>
-          </button>
-        );
-      })}
+      {items.map(renderItem)}
     </nav>
   );
 }

@@ -17,6 +17,8 @@ export default function ConversationView({
   fromNumber,
   composing,
   onCloseComposer,
+  onMobileBack,
+  hidden,
 }) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
@@ -257,10 +259,23 @@ export default function ConversationView({
   );
 
   return (
-    <div className="flex-1 flex flex-col bg-white min-w-0">
+    <div className="flex-1 flex flex-col bg-white min-w-0" style={hidden ? { display: 'none' } : undefined}>
       {!thread && composing ? (
         <div ref={composerRef} className="flex-1 flex flex-col min-h-0 bg-white">
           <div className="relative border-t border-b border-gray-200 px-4 py-3 flex items-center flex-wrap">
+            {onMobileBack && (
+              <button
+                type="button"
+                onClick={() => onMobileBack && onMobileBack()}
+                className="md:hidden w-8 h-8 shrink-0 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition mr-1"
+                title={T('Back', '返回')}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+              </button>
+            )}
             <span className="text-gray-700 font-medium mr-2 shrink-0">{t('chat.to')}:</span>
             {recipients.map((r) => (
               <span
@@ -323,9 +338,21 @@ export default function ConversationView({
       ) : (
         <>
           <div className="px-5 py-3.5 border-b border-slate-200 bg-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-slate-900">{thread.name}</div>
+            <div className="flex items-center">
+              {onMobileBack && (
+                <button
+                  onClick={() => onMobileBack && onMobileBack()}
+                  className="md:hidden w-9 h-9 shrink-0 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition mr-1"
+                  title={T('Back', '返回')}
+                >
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12 19 5 12 12 5" />
+                  </svg>
+                </button>
+              )}
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-900 truncate">{thread.name}</div>
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                   {fromNumber ? `${t('chat.sendAs')}: ${fromNumber}` : (thread.messages[0]?.direction === 'in' ? 'Client' : 'Conversation')}
