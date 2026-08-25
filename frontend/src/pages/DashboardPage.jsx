@@ -98,6 +98,33 @@ export default function DashboardPage() {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [navOpen, setNavOpen] = useState(false);
   const [mobileView, setMobileView] = useState('list');
+  const [vpLock, setVpLock] = useState(null);
+
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      const inset = Math.max(0, (window.innerHeight || vv.height) - vv.height);
+      const ae = document.activeElement;
+      const inputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      setVpLock(inset > 80 && inputFocused ? vv.height : null);
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', update);
+    document.addEventListener('focusout', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('visibilitychange', update);
+      document.removeEventListener('focusout', update);
+    };
+  }, []);
 
   const msgsCache = useRef({});
   const threadsRef = useRef([]);
@@ -729,6 +756,7 @@ export default function DashboardPage() {
           onRetry={retryMessage}
           onComposeSend={composeSend}
           contacts={threads}
+          onPickContact={selectThread}
           dialInput={dialInput}
           onDialChange={setDialInput}
           fromNumber={fromNumber}
@@ -794,7 +822,10 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="h-screen h-dvh flex flex-col bg-white dark:bg-slate-900">
+    <div
+      className="h-screen h-dvh flex flex-col bg-white dark:bg-slate-900"
+      style={vpLock ? { height: `${vpLock}px` } : undefined}
+    >
       <header className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}

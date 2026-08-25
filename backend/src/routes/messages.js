@@ -13,6 +13,12 @@ import { publishRealtime } from '../services/realtime.js';
 
 const router = Router();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Express 4 doesn't forward async rejections to the error middleware,
+// so wrap handlers that run untrusted id lookups.
+const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 router.use(authenticate);
 
 // GET conversation list for current user
@@ -32,7 +38,8 @@ router.get('/conversations', async (req, res) => {
 // Supports cursor pagination: ?limit=N (default 100, max 200) returns the
 // newest N; ?before=<created_at>&limit=N returns the N messages strictly
 // older than the cursor (for loading older history). Always ASC by time.
-router.get('/conversations/:id/messages', async (req, res) => {
+router.get('/conversations/:id/messages', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Conversation not found' });
   const { rows: conv } = await query(
     'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
     [req.params.id, req.user.id]
@@ -59,7 +66,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
   const out = rows.slice(0, limit).reverse(); // oldest -> newest
 
   res.json({ messages: out, hasMore, limit });
-});
+}));
 
 // List scheduled messages for current user
 router.get('/scheduled', async (req, res) => {
@@ -344,7 +351,8 @@ router.post('/blast', async (req, res) => {
 
 // GET delivery status of a single message (registered last so literal
 // routes like /conversations, /scheduled, /analytics match first)
-router.get('/:id', async (req, res) => {
+router.get('/:id', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Message not found' });
   const { rows } = await query(
     `SELECT m.id, m.status, m.message_sid, m.delivered_at, m.scheduled_at, m.error, m.cost,
             p.name AS provider_name
@@ -356,10 +364,11 @@ router.get('/:id', async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: 'Message not found' });
   res.json({ message: rows[0] });
-});
+}));
 
 // DELETE a single message (hard delete) owned by the current user
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Message not found' });
   const { rows } = await query(
     `DELETE FROM messages m USING conversations c
      WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2
@@ -373,6 +382,6 @@ router.delete('/:id', async (req, res) => {
     message: { id: rows[0].id },
   });
   res.json({ ok: true });
-});
+}));
 
 export default router;

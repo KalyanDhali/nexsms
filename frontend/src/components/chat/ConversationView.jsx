@@ -29,6 +29,7 @@ export default function ConversationView({
   onRetry,
   onComposeSend,
   contacts,
+  onPickContact,
   dialInput,
   onDialChange,
   fromNumber,
@@ -70,16 +71,29 @@ export default function ConversationView({
     const update = () => {
       const lh = window.innerHeight || vv.height;
       const inset = Math.max(0, lh - vv.height);
-      setKbInset(inset > 80 ? inset : 0);
+      const ae = document.activeElement;
+      const inputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      setKbInset(inset > 80 && inputFocused ? inset : 0);
     };
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    document.addEventListener('focusout', update);
     update();
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      document.removeEventListener('focusout', update);
     };
   }, []);
+
+  useEffect(() => {
+    if (kbInset > 0) {
+      composerRef.current?.scrollIntoView({ block: 'end' });
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [kbInset]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showNewChip, setShowNewChip] = useState(false);
   const [actionsFor, setActionsFor] = useState(null);
@@ -103,6 +117,15 @@ export default function ConversationView({
   useEffect(() => {
     if (!composing) setRecipients([]);
   }, [composing]);
+
+  useEffect(() => {
+    if (hidden) {
+      setSending(false);
+      setUploading(false);
+      setEmojiOpen(false);
+      setAttachOpen(false);
+    }
+  }, [hidden]);
 
   const draftKey = thread ? `nexsms_draft_thread_${thread.id}` : composing ? 'nexsms_draft_compose' : null;
 
@@ -334,11 +357,20 @@ export default function ConversationView({
   };
 
   const digits = (s) => (s || '').replace(/[^0-9]/g, '');
+  const typedDigits = digits(dialInput);
+  const contactMatches =
+    typedDigits.length >= 7
+      ? (contacts || []).filter(
+          (th) =>
+            digits(th.contactNumber || th.name) === typedDigits &&
+            !recipients.some((r) => digits(r) === typedDigits)
+        )
+      : [];
   const fullNumber =
     recipients.length < MAX_RECIPIENTS &&
     /^[0-9+()\s-]{7,}$/.test(dialInput.trim()) &&
     !recipients.some((r) => digits(r) === digits(dialInput)) &&
-    !contacts.some((th) => digits(th.contactNumber || th.name) === digits(dialInput));
+    contactMatches.length === 0;
 
   const pickFile = (e) => {
     const file = e.target.files?.[0];
@@ -567,8 +599,7 @@ export default function ConversationView({
   const composerBar = (onSubmit, type) => (
     <form
       onSubmit={onSubmit}
-      className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[padding]"
-      style={kbInset ? { paddingBottom: `calc(0.75rem + ${kbInset}px)` } : undefined}
+      className="border-t border-slate-200 dark:border-slate-800 px-2 sm:px-3 pt-2 bg-white dark:bg-slate-900 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       {(mediaUrl || pendingUrl) && (
         <div className="mb-2 flex items-center gap-2">
@@ -610,8 +641,8 @@ export default function ConversationView({
         </div>
       )}
       {uploadError && <div className="mb-2 text-xs text-rose-500">{uploadError}</div>}
-      <div className="flex items-end gap-2">
-        <div className="relative shrink-0 self-center">
+      <div className="flex items-end gap-1.5">
+        <div className="relative shrink-0 self-end">
           <button
             type="button"
             onClick={() => {
@@ -625,21 +656,25 @@ export default function ConversationView({
             {uploading ? (
               <span className="block w-4 h-4 border-2 border-slate-400 border-t-primary rounded-full animate-spin" />
             ) : (
-              <span className="text-2xl leading-none">+</span>
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
             )}
           </button>
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
 
-        <div className="flex-1 min-w-0 flex flex-col bg-slate-100 dark:bg-slate-800 rounded-3xl px-4 pt-2 pb-1.5 border border-transparent focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/30 transition">
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-100 dark:bg-slate-800 rounded-3xl px-4 pt-2.5 pb-1 border border-slate-200 dark:border-slate-700 no-focus-ring">
           <textarea
             ref={textareaRef}
             rows={1}
             value={draft}
+            enterKeyHint="send"
             onChange={(e) => {
               setDraft(e.target.value);
               autosize();
             }}
+            onFocus={() => composerRef.current?.scrollIntoView({ block: 'end' })}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -647,7 +682,7 @@ export default function ConversationView({
               }
             }}
             placeholder={t('chat.typeMessage')}
-            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 resize-none leading-5 max-h-[120px] py-1"
+            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 resize-none leading-5 max-h-[120px] py-0.5"
           />
           <div className="flex items-center justify-end h-4">
             {draft.length > 0 && (
@@ -658,7 +693,7 @@ export default function ConversationView({
           </div>
         </div>
 
-        <div className="relative shrink-0 self-center" ref={emojiRef}>
+        <div className="relative shrink-0 self-end" ref={emojiRef}>
           <button
             type="button"
             onClick={() => {
@@ -682,7 +717,7 @@ export default function ConversationView({
         <button
           type="submit"
           disabled={!canSend || (!draft.trim() && !mediaUrl)}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition shrink-0 ${
+          className={`w-11 h-11 rounded-full flex items-center justify-center transition shrink-0 self-end ${
             canSend && (draft.trim() || mediaUrl)
               ? 'bg-primary text-white hover:opacity-90 active:scale-95'
               : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
@@ -693,9 +728,9 @@ export default function ConversationView({
           {sending ? (
             <span className="block w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
           ) : (
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2L11 13" />
+              <path d="M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           )}
         </button>
@@ -751,7 +786,24 @@ export default function ConversationView({
 
             {(toFocused || dialInput.trim()) && (
               <div className="absolute top-full left-4 mt-1 w-72 max-w-[calc(100%-2rem)] bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 z-10 overflow-hidden">
-                {fullNumber ? (
+                {contactMatches.length > 0 ? (
+                  contactMatches.map((cm) => (
+                    <button
+                      key={cm.id}
+                      type="button"
+                      onClick={() => onPickContact && onPickContact(cm.id)}
+                      className="w-full px-4 py-3 text-left text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2"
+                    >
+                      <span className="w-7 h-7 shrink-0 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs">
+                        {(cm.name || cm.contactNumber || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{cm.name || cm.contactNumber}</span>
+                        {cm.contactNumber && <span className="block text-xs text-slate-400 dark:text-slate-500 truncate">{cm.contactNumber}</span>}
+                      </span>
+                    </button>
+                  ))
+                ) : fullNumber ? (
                   <button
                     onClick={() => addRecipient(dialInput.trim())}
                     className="w-full px-4 py-3 text-left text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2"
