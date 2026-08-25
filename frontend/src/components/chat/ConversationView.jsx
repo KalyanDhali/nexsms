@@ -71,19 +71,19 @@ export default function ConversationView({
     const update = () => {
       const lh = window.innerHeight || vv.height;
       const inset = Math.max(0, lh - vv.height);
-      const ae = document.activeElement;
-      const inputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
-      setKbInset(inset > 80 && inputFocused ? inset : 0);
+      setKbInset(inset > 80 ? inset : 0);
     };
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
     window.addEventListener('resize', update);
+    document.addEventListener('focusin', update);
     document.addEventListener('focusout', update);
     update();
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      document.removeEventListener('focusin', update);
       document.removeEventListener('focusout', update);
     };
   }, []);
@@ -669,6 +669,7 @@ export default function ConversationView({
             ref={textareaRef}
             rows={1}
             value={draft}
+            autoFocus={type === 'compose'}
             enterKeyHint="send"
             onChange={(e) => {
               setDraft(e.target.value);
@@ -843,6 +844,7 @@ export default function ConversationView({
           <div className="flex-1 w-full overflow-y-auto" />
 
           {recipients.length > 0 && composerBar(submitCompose, 'compose')}
+          {kbInset > 0 && <div className="w-full shrink-0" style={{ height: kbInset }} data-testid="kb-spacer" />}
         </div>
       ) : !thread ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-slate-400 dark:text-slate-500">
@@ -977,6 +979,7 @@ export default function ConversationView({
           </div>
 
           {composerBar(submitDraft, 'draft')}
+          {kbInset > 0 && <div className="w-full shrink-0" style={{ height: kbInset }} data-testid="kb-spacer" />}
         </>
       )}
 

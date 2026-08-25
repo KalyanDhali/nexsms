@@ -14,8 +14,9 @@
 
 html, body {
   height: 100%;
-  overflow-x: hidden;
+  overflow: hidden;
   max-width: 100%;
+  overscroll-behavior: none;
 }
 
 body {
@@ -23,7 +24,6 @@ body {
   background: #f8fafc;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-x: none;
 }
 
 html.dark body {
