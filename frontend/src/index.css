@@ -44,6 +44,21 @@ html.dark body {
   scrollbar-width: none;
 }
 
+/* Desktop-site mode on mobile browsers (e.g., Chrome/Edge/Firefox/Brave
+   "Desktop site" at ~980px layout viewport): enforce a 1024px minimum so
+   the 3 columns (Sidebar / Chat / Dialpad) never crush into vertical
+   strips; the app shell scrolls horizontally instead. Standard desktop
+   (>=1024px) renders exactly 1024px and shows no scrollbar. */
+@media screen and (min-width: 768px) {
+  .app-shell {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .desktop-min-width {
+    min-width: 1024px;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
