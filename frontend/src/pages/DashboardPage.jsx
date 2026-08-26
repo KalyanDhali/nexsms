@@ -95,10 +95,26 @@ export default function DashboardPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [senderSheetOpen, setSenderSheetOpen] = useState(false);
   const [bnav, setBnav] = useState('home');
-  // Mobile is decided by the PHYSICAL screen, not just the layout viewport:
-  // a phone (screen <=767px) keeps the single-panel UI even when the browser
-  // reports a wide layout viewport (Desktop Site / pinch-zoom out).
-  const isPhoneHardware = () => typeof screen !== 'undefined' && screen.width > 0 && screen.width <= 767;
+  // Mobile is decided by the PHYSICAL device, not the layout viewport:
+  // a phone keeps the single-panel UI even when the browser reports a wide
+  // layout viewport ("Request desktop site" inflates innerWidth to ~980px and
+  // some browsers also report screen.width as 980).
+  const isPhoneHardware = () => {
+    if (typeof screen === 'undefined') return false;
+    const sw = screen.width;
+    const outer = typeof window !== 'undefined' && window.outerWidth > 0 ? window.outerWidth : 0;
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const hasTouch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+    // 1) Genuine small physical screen (normal mobile viewport).
+    if (sw > 0 && sw <= 767) return true;
+    // 2) Browser window itself is narrow even when the layout viewport was
+    //    inflated to ~980px by "Request desktop site".
+    if (outer > 0 && outer <= 767) return true;
+    // 3) Android touch device reporting a ~980px screen width = the classic
+    //    "Request desktop site" fingerprint on a phone.
+    if (/Android/i.test(ua) && hasTouch && sw >= 930 && sw <= 1030) return true;
+    return false;
+  };
   const isMobile = useMediaQuery('(max-width: 767px)') || isPhoneHardware();
   const isDesktop = useMediaQuery('(min-width: 1280px)');
   const [navOpen, setNavOpen] = useState(false);
@@ -780,7 +796,7 @@ export default function DashboardPage() {
           hidden={isMobile && mobileView === 'list'}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-400 min-w-0 hidden md:flex">
+        <div className={`flex-1 items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-400 min-w-0 ${isMobile ? 'hidden' : 'hidden md:flex'}`}>
           {nav === 'calls' ? T('Call history', '通话记录') : nav === 'contacts' ? T('Contacts', '联系人') : ''}
         </div>
       )}
@@ -796,6 +812,7 @@ export default function DashboardPage() {
       )}
       <KeypadPanel
         open={keypadOpen}
+        isMobile={isMobile}
         onToggle={() => setKeypadOpen((v) => !v)}
         fromNumber={fromNumber}
         numbers={numbers}

@@ -15,7 +15,7 @@ export default function CallsPanel({ onPick, hidden }) {
 
   return (
     <aside
-      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 bg-white flex flex-col"
+      className="list-column w-full shrink-0 border-r border-slate-200 bg-white flex flex-col"
       style={hidden ? { display: 'none' } : undefined}
     >
       <div className="px-4 py-3 border-b border-slate-100">

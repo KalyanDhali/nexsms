@@ -63,7 +63,7 @@ export default function MobileBottomNav({ active, onChange, unreadTotal }) {
   const isZh = lang === 'zh';
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-stretch">
         {ITEMS.map((item) => {
           const on = active === item.key;

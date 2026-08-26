@@ -14,7 +14,7 @@ export default function ContactsPanel({ threads, onSelect, hidden }) {
 
   return (
     <aside
-      className="w-full md:w-[320px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
+      className="list-column w-full shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900"
       style={hidden ? { display: 'none' } : undefined}
     >
       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 space-y-2">

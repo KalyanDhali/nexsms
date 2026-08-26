@@ -19,6 +19,7 @@ const KEYS = [
 
 export default function KeypadPanel({
   open,
+  isMobile = false,
   onToggle,
   fromNumber,
   numbers,
@@ -49,6 +50,7 @@ export default function KeypadPanel({
   }, [dropdownOpen]);
 
   if (!open) {
+    if (isMobile) return null;
     return (
       <div className="w-11 shrink-0 border-l border-slate-200 bg-white hidden md:flex items-start justify-center py-4">
         <button
@@ -63,7 +65,12 @@ export default function KeypadPanel({
   }
 
   return (
-    <div className="keypad-panel sidebar-right w-full shrink-0 md:border-l border-gray-200 bg-white h-full flex flex-col min-h-0 min-w-0 max-md:fixed max-md:inset-0 max-md:z-50 max-md:shadow-2xl" data-testid="keypad-panel">
+    <div
+      className={`keypad-panel sidebar-right w-full shrink-0 bg-white h-full flex flex-col min-h-0 min-w-0 ${
+        isMobile ? 'fixed inset-0 z-50 shadow-2xl pt-[env(safe-area-inset-top)]' : 'md:border-l border-gray-200'
+      }`}
+      data-testid="keypad-panel"
+    >
       <div className="relative border-b border-gray-200 pt-3 pb-2 px-4 flex items-start gap-2" ref={dropdownRef}>
         <div className="min-w-0 flex-1">
           <div className="text-xs text-gray-500 font-normal">{t('chat.callAs')}</div>
@@ -79,7 +86,7 @@ export default function KeypadPanel({
         </div>
         <button
           onClick={onToggle}
-          className="hidden md:flex w-8 h-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 items-center justify-center transition"
+          className={`${isMobile ? 'hidden' : 'hidden md:flex'} w-8 h-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 items-center justify-center transition`}
           title={t('chat.hideKeypad')}
           aria-label={t('chat.hideKeypad')}
         >
@@ -131,7 +138,7 @@ export default function KeypadPanel({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 max-md:hidden">
+      <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-2 ${isMobile ? 'hidden' : 'md:block'}`}>
         {matches.map((m) => (
           <button
             key={m.id}
@@ -155,8 +162,8 @@ export default function KeypadPanel({
         )}
       </div>
 
-      <div className="max-md:flex-1 max-md:flex max-md:flex-col max-md:justify-center max-md:min-h-0 max-md:overflow-y-auto">
-        <div className="grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center max-md:gap-y-4 max-md:gap-x-3 max-md:px-6 max-md:pt-6 max-md:pb-4">
+      <div className={isMobile ? 'flex-1 flex flex-col justify-center min-h-0 overflow-y-auto' : ''}>
+        <div className={`grid grid-cols-3 gap-y-6 gap-x-4 px-8 pt-10 pb-6 text-center ${isMobile ? 'gap-y-4 gap-x-3 px-6 pt-6 pb-4' : ''}`}>
           {KEYS.map(([digit, letters]) => (
             <button
               key={digit}
