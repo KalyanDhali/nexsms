@@ -90,9 +90,9 @@ export default function WebhooksSection() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h3 className="font-semibold text-slate-900 mb-1">{T('Webhooks', 'Webhooks')}</h3>
-      <p className="text-sm text-slate-500 mb-3">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h3 className="font-semibold text-slate-900 dark:text-white mb-1">{T('Webhooks', 'Webhooks')}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
         {T('Get real-time notifications when messages are sent, delivered, fail or arrive. Each request includes an HMAC-SHA256 X-NexSMS-Signature header.',
            '在消息发送、送达、失败或接收时实时通知。每个请求都带有 HMAC-SHA256 X-NexSMS-Signature 签名头。')}
       </p>
@@ -102,12 +102,12 @@ export default function WebhooksSection() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder={T('https://your-server.com/nexsms-hook', 'https://your-server.com/nexsms-hook')}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2"
+          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2"
           style={{ '--tw-ring-color': theme.primary }}
         />
         <div className="flex flex-wrap gap-2">
           {EVENT_OPTIONS.map((ev) => (
-            <label key={ev.value} className="flex items-center gap-1.5 text-sm text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
+            <label key={ev.value} className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 cursor-pointer">
               <input
                 type="checkbox"
                 checked={events.includes(ev.value)}
@@ -126,7 +126,7 @@ export default function WebhooksSection() {
 
       {secret && (
         <div className="mt-3 p-3 rounded-lg bg-slate-900 text-slate-100 text-sm break-all">
-          <div className="text-xs text-slate-400 mb-1">
+          <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">
             {T('Your webhook secret (shown once) — use it to verify signatures:', '您的 Webhook 密钥（仅显示一次）— 用于验证签名：')}
           </div>
           <div className="flex items-center gap-2">
@@ -139,14 +139,14 @@ export default function WebhooksSection() {
       )}
 
       {loading ? (
-        <div className="mt-4 text-sm text-slate-500">{T('Loading…', '加载中…')}</div>
+        <div className="mt-4 text-sm text-slate-500 dark:text-slate-400">{T('Loading…', '加载中…')}</div>
       ) : hooks.length === 0 ? (
-        <div className="mt-4 text-sm text-slate-400">{T('No webhooks configured.', '尚未配置 Webhook。')}</div>
+        <div className="mt-4 text-sm text-slate-400 dark:text-slate-500">{T('No webhooks configured.', '尚未配置 Webhook。')}</div>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-100">
+              <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
                 <th className="px-3 py-2 font-medium">{T('URL', '地址')}</th>
                 <th className="px-3 py-2 font-medium">{T('Events', '事件')}</th>
                 <th className="px-3 py-2 font-medium">{T('Status', '状态')}</th>
@@ -156,10 +156,10 @@ export default function WebhooksSection() {
             <tbody>
               {hooks.map((h) => (
                 <tr key={h.id} className="border-b border-slate-50">
-                  <td className="px-3 py-2 font-mono text-xs text-slate-700 max-w-[220px] truncate">{h.url}</td>
-                  <td className="px-3 py-2 text-slate-500 text-xs">{(h.events || []).join(', ')}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-200 max-w-[220px] truncate">{h.url}</td>
+                  <td className="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs">{(h.events || []).join(', ')}</td>
                   <td className="px-3 py-2">
-                    <button onClick={() => doUpdate(h)} className={`px-2 py-0.5 text-xs rounded-full ${h.active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                    <button onClick={() => doUpdate(h)} className={`px-2 py-0.5 text-xs rounded-full ${h.active ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
                       {h.active ? T('Active', '活跃') : T('Disabled', '已停用')}
                     </button>
                   </td>

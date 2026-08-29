@@ -129,6 +129,24 @@ html.dark body {
   }
 }
 
+/* MOBILE (phone): the fixed bottom nav overlays the bottom of the shell, so
+   full-height panel scrollers (Numbers/Billing/API/Account/Settings) need
+   bottom clearance to keep their last card/action reachable. */
+html.is-phone .app-shell > .overflow-y-auto {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 5rem);
+}
+
+/* Soft-keyboard safe transitions. The JS visualViewport inset (kbInset)
+   grows the spacer / keypad padding when the mobile keyboard opens; these
+   animate instead of snapping so the composer, header and background glide
+   into place rather than jerking. */
+.kb-spacer {
+  transition: height 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.kb-inset {
+  transition: padding-bottom 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
 /* Prevent mobile-browser zoom-on-focus distortion: any focused input
    must render at >=16px, otherwise Safari auto-zooms the whole page. */
 input,
@@ -164,6 +182,10 @@ html.dark ::-webkit-scrollbar-thumb {
   from { transform: translateY(-10px) scale(0.96); opacity: 0; }
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
+@keyframes emojiPop {
+  from { transform: translateY(10px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
 .animate-fade {
   animation: fadeIn 0.18s ease-out;
 }
@@ -173,9 +195,12 @@ html.dark ::-webkit-scrollbar-thumb {
 .animate-toast-in {
   animation: toastIn 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
+.animate-emoji-pop {
+  animation: emojiPop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade, .animate-sheet-up, .animate-toast-in, * {
+  .animate-fade, .animate-sheet-up, .animate-toast-in, .animate-emoji-pop, * {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
@@ -185,6 +210,16 @@ html.dark ::-webkit-scrollbar-thumb {
   outline: 2px solid #6366f1;
   outline-offset: 2px;
   border-radius: 4px;
+}
+/* No blue focus box / ring on typing fields (search, composer, to-field, etc.) */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 .no-focus-ring :focus-visible {
   outline: none;

@@ -13,15 +13,15 @@ export default function EmptyListPanel({ kind, hidden }) {
 
   return (
     <aside
-      className="list-column w-full shrink-0 border-r border-slate-200 bg-white flex flex-col"
+      className="list-column w-full shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col"
       style={hidden ? { display: 'none' } : undefined}
     >
-      <div className="px-4 py-3 border-b border-slate-100">
-        <span className="text-sm font-medium text-slate-900">{isZh ? m.zh : m.en}</span>
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <span className="text-sm font-medium text-slate-900 dark:text-white">{isZh ? m.zh : m.en}</span>
       </div>
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-8">
         <span className="text-3xl text-slate-300">··</span>
-        <span className="text-sm text-slate-500">{isZh ? m.subZh : m.subEn}</span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">{isZh ? m.subZh : m.subEn}</span>
       </div>
     </aside>
   );

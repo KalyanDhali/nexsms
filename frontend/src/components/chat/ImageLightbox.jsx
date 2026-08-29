@@ -38,15 +38,15 @@ export default function ImageLightbox({ src, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="relative bg-white rounded-xl shadow-2xl w-[min(90vw,480px)] max-h-[80vh] flex flex-col overflow-hidden"
+        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-[min(90vw,480px)] max-h-[80vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-gray-200">
-          <span className="text-sm text-slate-600 tabular-nums">{(zoom * 100).toFixed(0)}%</span>
+        <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-gray-200 dark:border-slate-700">
+          <span className="text-sm text-slate-600 dark:text-slate-300 tabular-nums">{(zoom * 100).toFixed(0)}%</span>
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1a73e8] hover:bg-[#1765cc] text-white text-sm transition"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1a73e8] dark:bg-[#2b7de9] hover:bg-[#1765cc] text-white text-sm transition"
               title="Save image"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -58,7 +58,7 @@ export default function ImageLightbox({ src, onClose }) {
             </button>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-gray-100 text-slate-600 flex items-center justify-center text-lg leading-none transition"
+              className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-lg leading-none transition"
               title="Close"
             >
               ×

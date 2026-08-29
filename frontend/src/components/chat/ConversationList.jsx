@@ -1,22 +1,30 @@
 import { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import ConversationItem from './ConversationItem.jsx';
+import { IconPlus, IconCheck, IconBack, IconTrash, IconInfo, IconRefresh } from '../icons.jsx';
 
 const FILTERS = [
   { key: 'all', en: 'All', zh: '全部' },
   { key: 'unread', en: 'Unread', zh: '未读' },
+  { key: 'media', en: 'Media', zh: '媒体' },
+  { key: 'favorites', en: 'Favorites', zh: '收藏' },
   { key: 'failed', en: 'Failed', zh: '失败' },
 ];
 
-export default function ConversationList({ threads, activeId, onSelect, onNew, query = '', hidden, loading = false, error = false, onRetry, onCollapse }) {
+export default function ConversationList({ threads, activeId, onSelect, onNew, query = '', hidden, loading = false, error = false, onRetry, onCollapse, isMobile = false, selectable = false, selected = [], onToggleSelect, onSelectMode, onBulkDelete, onCancelSelect, onSelectAll }) {
   const { t, lang } = useLanguage();
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
   const [filter, setFilter] = useState('all');
 
+  const selectedSet = selected instanceof Set ? selected : new Set(selected || []);
+  const selectedCount = selectedSet.size;
+
   const hasFailed = (th) => th.messages?.some((m) => m.direction === 'out' && m.status === 'failed');
   const filtered = threads.filter((th) => {
     if (filter === 'unread') return th.unread > 0;
+    if (filter === 'media') return th.hasMedia;
+    if (filter === 'favorites') return th.favorite;
     if (filter === 'failed') return hasFailed(th);
     return true;
   });
@@ -28,27 +36,79 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
     >
       <div className="px-3 pt-3 pb-2 space-y-2">
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={onNew}
-            className="flex-1 min-w-0 min-h-11 flex items-center justify-center gap-2 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition shadow-sm"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            {T('New message', '新消息')}
-          </button>
-          {onCollapse && (
-            <button
-              onClick={onCollapse}
-              className="hidden md:flex w-11 h-11 shrink-0 rounded-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 items-center justify-center transition"
-              title={T('Collapse list', '折叠列表')}
-              aria-label={T('Collapse list', '折叠列表')}
-            >
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
+          {!selectable ? (
+            <>
+              <button
+                onClick={onNew}
+                className="flex-1 min-w-0 min-h-11 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition shadow-sm"
+              >
+                <IconPlus className="w-4 h-4" strokeWidth={2.5} />
+                {T('New message', '新消息')}
+              </button>
+              {onSelectMode && (
+                <button
+                  onClick={() => onSelectMode(true)}
+                  className="w-11 h-11 shrink-0 rounded-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 items-center justify-center transition flex"
+                  title={T('Select', '选择')}
+                  aria-label={T('Select', '选择')}
+                  data-testid="select-mode-btn"
+                >
+                  <IconCheck className="w-5 h-5" />
+                </button>
+              )}
+              {onCollapse && (
+                <button
+                  onClick={onCollapse}
+                  className="hidden md:flex w-11 h-11 shrink-0 rounded-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 items-center justify-center transition"
+                  title={T('Collapse list', '折叠列表')}
+                  aria-label={T('Collapse list', '折叠列表')}
+                >
+                  <IconBack className="w-5 h-5" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-w-0 px-2 text-sm font-semibold text-slate-700 dark:text-slate-200 truncate" data-testid="select-count">
+                {selectedCount > 0
+                  ? `${selectedCount} ${T('selected', '已选择')}`
+                  : T('Select conversations', '选择对话')}
+              </div>
+              {onSelectAll && (
+                <button
+                  onClick={() => {
+                    const allSelected = filtered.length > 0 && selectedCount === filtered.length;
+                    onSelectAll(allSelected ? [] : filtered.map((t) => t.id));
+                  }}
+                  disabled={filtered.length === 0}
+                  className="min-h-11 px-3 rounded-full text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={T('Select all', '全选')}
+                  data-testid="select-all-btn"
+                >
+                  {filtered.length > 0 && selectedCount === filtered.length
+                    ? T('Deselect all', '取消全选')
+                    : T('Select all', '全选')}
+                </button>
+              )}
+              <button
+                onClick={onBulkDelete}
+                disabled={selectedCount === 0}
+                className="min-h-11 px-3 flex items-center gap-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-950/70 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                title={T('Delete selected', '删除所选')}
+                data-testid="bulk-delete-btn"
+              >
+                <IconTrash className="w-4 h-4" />
+                {T('Delete', '删除')}
+              </button>
+              <button
+                onClick={onCancelSelect}
+                className="min-h-11 px-3 rounded-full text-sm font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                title={T('Cancel', '取消')}
+                data-testid="select-cancel-btn"
+              >
+                {T('Cancel', '取消')}
+              </button>
+            </>
           )}
         </div>
 
@@ -69,7 +129,7 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 overflow-y-auto${isMobile ? ' pb-20' : ''}`}>
         {loading ? (
           <div className="px-3 py-2 space-y-3" aria-label={T('Loading conversations', '正在加载对话')} aria-busy="true">
             {[0, 1, 2, 3, 4].map((i) => (
@@ -84,20 +144,14 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
           </div>
         ) : error ? (
           <div className="flex flex-col items-center gap-3 py-14 px-6 text-center" data-testid="list-error">
-            <svg viewBox="0 0 24 24" className="w-9 h-9 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M12 9v4m0 4h.01" />
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            </svg>
+            <IconInfo className="w-9 h-9" strokeWidth={1.5} />
             <p className="text-sm text-slate-400 dark:text-slate-500">{T('Could not load conversations', '无法加载对话')}</p>
             {onRetry && (
               <button
                 onClick={onRetry}
                 className="min-h-11 px-5 rounded-full bg-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition flex items-center gap-2"
               >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
+                <IconRefresh className="w-4 h-4" strokeWidth={2.2} />
                 {T('Try again', '重试')}
               </button>
             )}
@@ -110,6 +164,9 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
                 thread={thread}
                 active={thread.id === activeId}
                 onSelect={onSelect}
+                selectable={selectable}
+                selected={selectedSet.has(thread.id)}
+                onToggleSelect={onToggleSelect}
               />
             ))}
             {filtered.length === 0 && (
@@ -123,6 +180,10 @@ export default function ConversationList({ threads, activeId, onSelect, onNew, q
                   ? T('No conversations yet', '暂无对话')
                   : filter === 'unread'
                   ? T('No unread messages', '没有未读消息')
+                  : filter === 'media'
+                  ? T('No media conversations', '没有媒体对话')
+                  : filter === 'favorites'
+                  ? T('No favorite conversations', '没有收藏的对话')
                   : T('No failed messages', '没有失败消息')}
               </div>
             )}

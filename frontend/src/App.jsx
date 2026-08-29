@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
+import LegalPage from './pages/LegalPage.jsx';
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -19,12 +20,35 @@ function AdminRoute({ children }) {
   return children;
 }
 
+function GuestRoute({ children }) {
+  const { user } = useAuth();
+  if (user) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/terms" element={<LegalPage type="terms" />} />
+      <Route path="/privacy" element={<LegalPage type="privacy" />} />
+      <Route path="/refund" element={<LegalPage type="refund" />} />
+      <Route
+        path="/login"
+        element={
+          <GuestRoute>
+            <LoginPage />
+          </GuestRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <GuestRoute>
+            <RegisterPage />
+          </GuestRoute>
+        }
+      />
       <Route
         path="/dashboard"
         element={

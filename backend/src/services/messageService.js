@@ -183,13 +183,14 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
   const result = await sendSmsWithFailover({ from: number.number, to: contactNumber, body, mediaUrl, countryCode });
 
   // Update message + conversation
+  const preview = body && body.trim() ? body : (mediaUrl ? '[Image]' : '');
   await query(
     `UPDATE messages SET status = 'sent', provider_id = $2, message_sid = $3, scheduled_at = NULL WHERE id = $1`,
     [messageId, result.providerId, result.sid]
   );
   await query(
     `UPDATE conversations SET last_message = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [conversationId, body]
+    [conversationId, preview]
   );
 
   // Accounting
@@ -206,6 +207,28 @@ export async function sendNow({ userId, numberId, conversationId, contactNumber,
     conversationId,
     message: { id: messageId, status: 'sent', sid: result.sid, providerName: result.providerName, cost, payFrom },
   });
+
+  // Demo nicety: the simulator provider has no real carrier to push a
+  // delivery-status webhook, so simulate one shortly after send so the
+  // UI's read-receipt ticks (single -> double) behave like production.
+  if (/simulator/i.test(result.providerName || '')) {
+    setTimeout(async () => {
+      try {
+        await query(
+          `UPDATE messages SET status = 'delivered', delivered_at = NOW()
+           WHERE id = $1 AND status IN ('sent','delivered')`,
+          [messageId]
+        );
+        publishRealtime(userId, {
+          type: 'message.updated',
+          conversationId,
+          message: { id: messageId, status: 'delivered', delivered_at: new Date().toISOString() },
+        });
+      } catch (err) {
+        console.error(`[simulator] delivery simulation failed for ${messageId}:`, err.message);
+      }
+    }, 2500);
+  }
 
   return { messageId, sid: result.sid, providerName: result.providerName, cost, status: 'sent', tried: result.tried, payFrom };
 }

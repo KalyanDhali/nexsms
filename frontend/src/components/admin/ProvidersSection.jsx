@@ -6,11 +6,12 @@ import {
 import { Card, Badge, Button, Field, TextInput, SelectInput, SectionHeader, Toast, Table } from './ui.jsx';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 
-const TYPES = ['twilio', 'singlehouse', 'plivo', 'telnyx'];
+const TYPES = ['twilio', 'singlehouse', 'plivo', 'telnyx', 'simulator'];
 
 export default function ProvidersSection() {
   const [providers, setProviders] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState('');
   const [toastColor, setToastColor] = useState('');
   const { lang } = useLanguage();
@@ -51,8 +52,9 @@ export default function ProvidersSection() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const openNew = () => { setEditing(null); setF(form); };
+  const openNew = () => { setEditing(null); setCreating(true); setF(form); };
   const openEdit = (p) => {
+    setCreating(false);
     setEditing(p);
     setF({
       name: p.name, type: p.type, priority: p.priority, active: p.active,
@@ -90,6 +92,7 @@ export default function ProvidersSection() {
         notify(T('Provider added', '提供商已添加'));
       }
       setEditing(null);
+      setCreating(false);
       load();
     } catch (e) {
       notify(e.response?.data?.error || 'Failed', 'red');
@@ -128,7 +131,7 @@ export default function ProvidersSection() {
       />
       <Toast message={toast} color={toastColor} />
 
-      {editing !== null || !providers.length ? (
+      {creating || editing !== null || !providers.length ? (
         <Card className="mb-5">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Field label={T('Name', '名称')}><TextInput value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="My Twilio" /></Field>
@@ -153,6 +156,11 @@ export default function ProvidersSection() {
             {f.type === 'singlehouse' && (
               <Field label="Base URL"><TextInput value={f.baseUrl} onChange={(e) => setF({ ...f, baseUrl: e.target.value })} placeholder="https://dashboard.singlehouse.com" /></Field>
             )}
+            {f.type === 'simulator' && (
+              <Field label={T('Note', '说明')}>
+                <div className="text-xs text-slate-500 dark:text-slate-400 pt-2">{T('Simulates successful sends locally — no credentials required.', '在本地模拟发送成功 — 无需凭据。')}</div>
+              </Field>
+            )}
             <Field label={T('Supported countries (comma, e.g. US, CA)', '支持的国家（逗号分隔，如 US, CA）')}>
               <TextInput value={f.supportedCountries} onChange={(e) => setF({ ...f, supportedCountries: e.target.value })} placeholder="US, CA, GB" />
             </Field>
@@ -166,7 +174,7 @@ export default function ProvidersSection() {
           <div className="flex gap-2 mt-4">
             <Button onClick={save}>{editing ? T('Save', '保存') : T('Create', '创建')}</Button>
             <Button variant="ghost" onClick={testConn}>{T('Test connection', '测试连接')}</Button>
-            {editing && <Button variant="ghost" onClick={() => { setEditing(null); }}>{T('Cancel', '取消')}</Button>}
+            {editing && <Button variant="ghost" onClick={() => { setEditing(null); setCreating(false); }}>{T('Cancel', '取消')}</Button>}
           </div>
         </Card>
       ) : null}

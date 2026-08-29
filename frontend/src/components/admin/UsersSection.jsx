@@ -76,9 +76,9 @@ export default function UsersSection() {
       <Table head={[T('User', '用户'), T('Status', '状态'), T('Balance', '余额'), T('Billing', '计费'), T('Daily limit', '每日上限'), T('Actions', '操作')]}>
         {users.map((u) =>
           editId === u.id ? (
-            <tr key={u.id} className="bg-indigo-50/40">
+            <tr key={u.id} className="bg-indigo-50/40 dark:bg-indigo-950/50/40">
               <td className="px-4 py-3">
-                <div className="font-medium text-slate-900">{u.email}</div>
+                <div className="font-medium text-slate-900 dark:text-white">{u.email}</div>
                 <TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 text-xs" />
               </td>
               <td className="px-4 py-3">
@@ -111,13 +111,13 @@ export default function UsersSection() {
           ) : (
             <tr key={u.id}>
               <td className="px-4 py-3">
-                <div className="font-medium text-slate-900">{u.name || '—'}</div>
-                <div className="text-xs text-slate-500">{u.email}</div>
+                <div className="font-medium text-slate-900 dark:text-white">{u.name || '—'}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{u.email}</div>
               </td>
               <td className="px-4 py-3"><Badge color={statusColor[u.status] || 'slate'}>{u.status}</Badge></td>
               <td className="px-4 py-3 font-medium">${Number(u.balance).toFixed(2)}</td>
               <td className="px-4 py-3"><Badge color="blue">{u.billing_mode}</Badge></td>
-              <td className="px-4 py-3 text-slate-500">{u.daily_limit_override ?? '—'}</td>
+              <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{u.daily_limit_override ?? '—'}</td>
               <td className="px-4 py-3"><Button variant="ghost" onClick={() => openEdit(u)}>{T('Edit', '编辑')}</Button></td>
             </tr>
           )

@@ -134,7 +134,7 @@ export default function PaymentsSection() {
                 <div className="col-span-2">
                   <Field label={T('Credentials JSON', '凭据 JSON')}>
                     <textarea value={form.credentials} onChange={(e) => setForm({ ...form, credentials: e.target.value })}
-                      className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-full h-16 font-mono text-xs" />
+                      className="border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm w-full h-16 font-mono text-xs" />
                   </Field>
                 </div>
               </div>
@@ -149,12 +149,12 @@ export default function PaymentsSection() {
             {gateways.map((g) => (
               <tr key={g.id}>
                 <td className="px-4 py-3">
-                  <div className="font-medium text-slate-900">{g.name}</div>
-                  <div className="text-xs text-slate-400">{g.slug}</div>
+                  <div className="font-medium text-slate-900 dark:text-white">{g.name}</div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500">{g.slug}</div>
                 </td>
-                <td className="px-4 py-3"><code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{g.type}</code></td>
-                <td className="px-4 py-3 text-slate-500">{g.fee_percent}%</td>
-                <td className="px-4 py-3 text-slate-500">{g.qr_mode}</td>
+                <td className="px-4 py-3"><code className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{g.type}</code></td>
+                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{g.fee_percent}%</td>
+                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{g.qr_mode}</td>
                 <td className="px-4 py-3"><Badge color={g.active ? 'green' : 'slate'}>{g.active ? T('Active', '启用') : T('Off', '禁用')}</Badge></td>
                 <td className="px-4 py-3"><Button variant="ghost" onClick={() => openEdit(g)}>{T('Edit', '编辑')}</Button></td>
               </tr>
@@ -165,12 +165,12 @@ export default function PaymentsSection() {
         <Table head={[T('User', '用户'), T('Gateway', '网关'), T('Amount', '金额'), T('Status', '状态'), T('TxID', '交易ID'), T('Created', '创建时间'), T('Actions', '操作')]}>
           {deposits.map((d) => (
             <tr key={d.id}>
-              <td className="px-4 py-3 text-xs text-slate-500">{d.user_email}</td>
+              <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{d.user_email}</td>
               <td className="px-4 py-3">{d.gateway_name}</td>
               <td className="px-4 py-3 font-medium">${Number(d.amount).toFixed(2)}</td>
               <td className="px-4 py-3"><Badge color={statusColor[d.status]}>{d.status}</Badge></td>
-              <td className="px-4 py-3 text-xs text-slate-400 font-mono">{d.txid ? d.txid.slice(0, 18) + '…' : '—'}</td>
-              <td className="px-4 py-3 text-xs text-slate-400">{new Date(d.created_at).toLocaleString()}</td>
+              <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500 font-mono">{d.txid ? d.txid.slice(0, 18) + '…' : '—'}</td>
+              <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">{new Date(d.created_at).toLocaleString()}</td>
               <td className="px-4 py-3">
                 {d.status === 'pending' && (
                   <Button onClick={() => confirm(d.id)}>{T('Confirm', '确认')}</Button>

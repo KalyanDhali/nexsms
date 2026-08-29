@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('nexsms_access_token');
     localStorage.removeItem('nexsms_refresh_token');
     localStorage.removeItem('nexsms_user');
+    sessionStorage.removeItem('nexsms_ui');
     setUser(null);
   };
 
@@ -56,10 +57,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, name, referralCode) => {
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/register', { email, password, name });
+      const { data } = await api.post('/auth/register', { email, password, name, referralCode });
       setSession(data);
       return { ok: true, user: data.user };
     } catch (err) {

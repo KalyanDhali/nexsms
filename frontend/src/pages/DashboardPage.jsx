@@ -4,13 +4,14 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useDarkMode } from '../context/DarkModeContext.jsx';
-import { getMyNumbers, getConversations, getConversationMessages, sendSms } from '../services/api.js';
+import { getMyNumbers, getConversations, getConversationMessages, sendSms, deleteConversations, pinConversation, favoriteConversation } from '../services/api.js';
 import NavSidebar from '../components/chat/NavSidebar.jsx';
 import ConversationList from '../components/chat/ConversationList.jsx';
 import ConversationView from '../components/chat/ConversationView.jsx';
 import KeypadPanel from '../components/chat/KeypadPanel.jsx';
 import ProfileMenu from '../components/chat/ProfileMenu.jsx';
 import CallsPanel from '../components/chat/CallsPanel.jsx';
+import CallScreen from '../components/chat/CallScreen.jsx';
 import EmptyListPanel from '../components/chat/EmptyListPanel.jsx';
 import ContactsPanel from '../components/chat/ContactsPanel.jsx';
 import MobileBottomNav from '../components/chat/MobileBottomNav.jsx';
@@ -18,11 +19,14 @@ import ContactDetailsPanel from '../components/chat/ContactDetailsPanel.jsx';
 import SenderNumberSheet from '../components/chat/SenderNumberSheet.jsx';
 import MobileSearchOverlay from '../components/chat/MobileSearchOverlay.jsx';
 import SettingsView from '../components/chat/SettingsView.jsx';
+import { prepareCallAudio } from '../utils/callAudio.js';
+import { IconSearch, IconClose, IconSun, IconMoon, IconSettings } from '../components/icons.jsx';
 import NumbersPanel from '../components/NumbersPanel.jsx';
 import BillingPanel from '../components/BillingPanel.jsx';
 import ApiKeysPanel from '../components/ApiKeysPanel.jsx';
 import AccountPanel from '../components/AccountPanel.jsx';
 import BlastModal from '../components/BlastModal.jsx';
+import NotificationBell from '../components/NotificationBell.jsx';
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
@@ -56,6 +60,8 @@ const mapMessage = (m) => ({
   mediaUrl: m.media_url,
   status: m.status,
   error: m.error,
+  reaction: m.reaction || null,
+  readAt: m.read_at || null,
   time: formatTime(m.time || m.created_at),
   ts: m.time || m.created_at,
 });
@@ -72,7 +78,18 @@ export default function DashboardPage() {
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadsError, setThreadsError] = useState('');
-  const [activeId, setActiveId] = useState(null);
+  const restoreUi = () => {
+    try {
+      return JSON.parse(sessionStorage.getItem('nexsms_ui') || '{}');
+    } catch {
+      return {};
+    }
+  };
+  const savedUiRef = useRef(null);
+  if (savedUiRef.current === null) savedUiRef.current = restoreUi();
+  const savedUi = savedUiRef.current;
+  const [activeId, setActiveId] = useState(savedUi.activeId || null);
+  const [notifTick, setNotifTick] = useState(0);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState('');
@@ -86,15 +103,15 @@ export default function DashboardPage() {
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
   );
   const [numbers, setNumbers] = useState([]);
-  const [tab, setTab] = useState('messages');
-  const [nav, setNav] = useState('messages');
+  const [tab, setTab] = useState(savedUi.tab || 'messages');
+  const [nav, setNav] = useState(savedUi.nav || 'messages');
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(savedUi.composing || false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [senderSheetOpen, setSenderSheetOpen] = useState(false);
-  const [bnav, setBnav] = useState('home');
+  const [bnav, setBnav] = useState(savedUi.bnav || 'home');
   // Mobile is decided by the PHYSICAL device, not the layout viewport:
   // a phone keeps the single-panel UI even when the browser reports a wide
   // layout viewport ("Request desktop site" inflates innerWidth to ~980px and
@@ -118,9 +135,20 @@ export default function DashboardPage() {
   const isMobile = useMediaQuery('(max-width: 767px)') || isPhoneHardware();
   const isDesktop = useMediaQuery('(min-width: 1280px)');
   const [navOpen, setNavOpen] = useState(false);
-  const [mobileView, setMobileView] = useState('list');
+  const [mobileView, setMobileView] = useState(savedUi.mobileView || 'list');
   const [listCollapsed, setListCollapsed] = useState(false);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+  const [call, setCall] = useState(null);
+  const [callLog, setCallLog] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('nexsms_calls') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const callTimerRef = useRef(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   useEffect(() => {
     document.documentElement.classList.toggle('is-phone', isMobile);
@@ -135,6 +163,16 @@ export default function DashboardPage() {
   const [hasMore, setHasMore] = useState(false);
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
 
+  useEffect(
+    () => () => {
+      if (callTimerRef.current) {
+        clearTimeout(callTimerRef.current);
+        clearInterval(callTimerRef.current);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const on = () => setOffline(false);
     const off = () => setOffline(true);
@@ -145,6 +183,37 @@ export default function DashboardPage() {
       window.removeEventListener('offline', off);
     };
   }, []);
+
+  // Persist the current screen so a mobile browser killing the background tab
+  // (full reload on reopen) restores the user's last view instead of the home page.
+  useEffect(() => {
+    const save = () => {
+      try {
+        sessionStorage.setItem('nexsms_ui', JSON.stringify({
+          tab, nav, bnav, mobileView, activeId, composing,
+        }));
+      } catch {
+        /* ignore quota errors */
+      }
+    };
+    save();
+    window.addEventListener('pagehide', save);
+    const onVis = () => { if (document.visibilityState === 'hidden') save(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [tab, nav, bnav, mobileView, activeId, composing]);
+
+  // If the restored thread no longer exists (or is still loading), fall back to
+  // the list view instead of showing a blank thread screen.
+  useEffect(() => {
+    const found = threads.some((th) => th.id === activeId);
+    if (isMobile && mobileView === 'thread' && !composing && !threadsLoading && !found) {
+      setMobileView('list');
+    }
+  }, [activeId, composing, mobileView, threadsLoading, isMobile, threads]);
 
   useEffect(() => {
     threadsRef.current = threads;
@@ -164,6 +233,9 @@ export default function DashboardPage() {
       unread: conv.unread_count || conv.unread || 0,
       lastDirection: list.length ? list[list.length - 1].direction : 'in',
       messages: list,
+      pinned: Boolean(conv.pinned),
+      favorite: Boolean(conv.favorite),
+      hasMedia: Boolean(conv.has_media),
     };
   };
 
@@ -328,6 +400,7 @@ export default function DashboardPage() {
 
   const applyInboundMessage = (event) => {
     const { conversationId, message } = event;
+    setNotifTick((t) => t + 1);
     if (findMsgInCache(message.id)) {
       if (conversationId !== activeIdRef.current) {
         bumpThread(conversationId, { unread: (threadsRef.current.find((t) => t.id === conversationId)?.unread || 0) + 1 });
@@ -360,9 +433,71 @@ export default function DashboardPage() {
   const handleRealtimeEvent = (event) => {
     if (!event || !event.type) return;
     if (event.type === 'message.new') applyInboundMessage(event);
-    else if (event.type === 'message.created') applyCreatedMessage(event);
-    else if (event.type === 'message.updated') applyStatusPatch(event);
+    else if (event.type === 'message.created') applyCreatedMessage(event);    else if (event.type === 'message.updated') applyStatusPatch(event);
     else if (event.type === 'message.deleted') applyDeletedMessage(event);
+    else if (event.type === 'message.reaction') applyReaction(event);
+    else if (event.type === 'messages.read') applyReadReceipts(event);
+    else if (event.type === 'conversations.deleted') applyDeletedConversations(event.ids);
+  };
+
+  const applyReaction = (event) => {
+    const { conversationId, message } = event;
+    if (!message?.id) return;
+    const found = findMsgInCache(message.id);
+    if (found) {
+      const { convId, idx } = found;
+      const cur = (msgsCache.current[convId] || []).slice();
+      cur[idx] = { ...cur[idx], reaction: message.reaction || null };
+      msgsCache.current[convId] = cur;
+      if (convId === activeIdRef.current) setMessages(cur);
+      setThreads((prev) => prev.map((t) => (t.id === convId ? { ...t, messages: cur } : t)));
+    }
+  };
+
+  const applyReadReceipts = (event) => {
+    const ids = new Set(event.messageIds || []);
+    if (!ids.size) return;
+    const convId = event.conversationId;
+    const cur = (msgsCache.current[convId] || []).map((m) =>
+      ids.has(m.id) ? { ...m, readAt: m.readAt || new Date().toISOString() } : m
+    );
+    msgsCache.current[convId] = cur;
+    if (convId === activeIdRef.current) setMessages(cur);
+    setThreads((prev) => prev.map((t) => (t.id === convId ? { ...t, messages: cur } : t)));
+  };
+
+  const handlePin = async (pinned) => {
+    if (!activeIdRef.current) return;
+    try {
+      await pinConversation(activeIdRef.current, pinned);
+      setThreads((prev) =>
+        prev.map((t) => (t.id === activeIdRef.current ? { ...t, pinned: !!pinned } : t)).sort((a, b) => (b.pinned === a.pinned ? 0 : b.pinned ? 1 : -1))
+      );
+      toast(pinned ? T('Conversation pinned', '已置顶对话') : T('Conversation unpinned', '已取消置顶'), 'success');
+    } catch {
+      toast(T('Could not update conversation', '无法更新对话'), 'error');
+    }
+  };
+
+  const handleFavorite = async (favorite) => {
+    if (!activeIdRef.current) return;
+    try {
+      await favoriteConversation(activeIdRef.current, favorite);
+      setThreads((prev) => prev.map((t) => (t.id === activeIdRef.current ? { ...t, favorite: !!favorite } : t)));
+    } catch {
+      toast(T('Could not update conversation', '无法更新对话'), 'error');
+    }
+  };
+
+  const handleReact = (msgId, reaction) => {
+    const found = findMsgInCache(msgId);
+    if (!found) return;
+    const { convId, idx } = found;
+    const cur = (msgsCache.current[convId] || []).slice();
+    cur[idx] = { ...cur[idx], reaction: reaction || null };
+    msgsCache.current[convId] = cur;
+    if (convId === activeIdRef.current) setMessages(cur);
+    setThreads((prev) => prev.map((t) => (t.id === convId ? { ...t, messages: cur } : t)));
   };
 
   const removeMessage = (id) => {
@@ -381,6 +516,19 @@ export default function DashboardPage() {
 
   const applyDeletedMessage = (event) => {
     removeMessage(event.message?.id);
+  };
+
+  const applyDeletedConversations = (ids) => {
+    if (!Array.isArray(ids) || !ids.length) return;
+    const gone = new Set(ids);
+    setThreads((prev) => prev.filter((t) => !gone.has(t.id)));
+    threadsRef.current = threadsRef.current.filter((t) => !gone.has(t.id));
+    for (const id of ids) delete msgsCache.current[id];
+    if (activeId && gone.has(activeId)) {
+      activeIdRef.current = null;
+      setActiveId(null);
+      setMessages([]);
+    }
   };
 
   useEffect(() => {
@@ -462,15 +610,16 @@ export default function DashboardPage() {
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, messages: cur } : t)));
   };
 
-  const sendMessage = async (body, mediaUrl = null) => {
+  const sendMessage = async (body, mediaUrl = null, scheduledAt = null) => {
     const conv = threadsRef.current.find((t) => t.id === activeIdRef.current);
     if (!conv) return;
     const tmpId = `tmp-${Date.now()}`;
-    appendToConv(conv.id, { id: tmpId, direction: 'out', body, mediaUrl, status: 'pending', error: '', time: 'Now' });
+    appendToConv(conv.id, { id: tmpId, direction: 'out', body, mediaUrl, status: scheduledAt ? 'scheduled' : 'pending', error: '', time: 'Now' });
     try {
-      const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body, mediaUrl });
+      const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body, media_url: mediaUrl, scheduledAt });
       patchMsg(conv.id, tmpId, { status: data.status || 'sent', id: data.messageId || tmpId });
-      if (data.status === 'failed') toast(T('Message could not be sent', '消息发送失败'), 'error');
+      if (data.status === 'scheduled') toast(T('Message scheduled', '消息已定时'), 'success');
+      else if (data.status === 'failed') toast(T('Message could not be sent', '消息发送失败'), 'error');
       else toast(T('Message sent', '消息已发送'), 'success');
     } catch {
       patchMsg(conv.id, tmpId, { status: 'failed', error: 'Failed to send' });
@@ -484,7 +633,7 @@ export default function DashboardPage() {
     if (!conv) return;
     patchMsg(conv.id, msg.id, { status: 'pending', error: '' });
     try {
-      const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body: msg.body, mediaUrl: msg.mediaUrl });
+      const { data } = await sendSms({ to: conv.contactNumber, fromNumberId: conv.numberId, body: msg.body, media_url: msg.mediaUrl });
       patchMsg(conv.id, msg.id, { status: data.status || 'sent', id: data.messageId || msg.id });
       if (data.status === 'failed') toast(T('Message could not be sent', '消息发送失败'), 'error');
       else toast(T('Message sent', '消息已发送'), 'success');
@@ -508,7 +657,7 @@ export default function DashboardPage() {
       let data;
       let ok = false;
       try {
-        ({ data } = await sendSms({ to: r, fromNumberId: fId, body, mediaUrl }));
+        ({ data } = await sendSms({ to: r, fromNumberId: fId, body, media_url: mediaUrl }));
         ok = true;
       } catch {
         data = {};
@@ -615,6 +764,8 @@ export default function DashboardPage() {
     setDialInput(contact || '');
     setSearch('');
     setSearchInput('');
+    setNav('messages');
+    setTab('messages');
     if (isMobile) {
       setMobileView('thread');
       setKeypadOpen(false);
@@ -630,6 +781,73 @@ export default function DashboardPage() {
     setMobileView('list');
     setComposing(false);
     setKeypadOpen(false);
+  };
+
+  const startCall = (number) => {
+    const n = String(number || '').trim();
+    if (!n || call) return;
+    prepareCallAudio();
+    setCall({ number: n, status: 'calling', seconds: 0 });
+    callTimerRef.current = setTimeout(() => {
+      setCall((c) => (c && c.status === 'calling' ? { ...c, status: 'connected' } : c));
+      callTimerRef.current = setInterval(() => {
+        setCall((c) => (c ? { ...c, seconds: c.seconds + 1 } : c));
+      }, 1000);
+    }, 1600);
+  };
+
+  const endCall = () => {
+    if (callTimerRef.current) {
+      clearTimeout(callTimerRef.current);
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    if (call) {
+      const now = new Date();
+      const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      setCallLog((log) => {
+        const next = [{ id: Date.now(), name: call.number, dir: 'out', time }, ...log].slice(0, 50);
+        localStorage.setItem('nexsms_calls', JSON.stringify(next));
+        return next;
+      });
+    }
+    setCall(null);
+  };
+
+  const toggleSelectMode = (v) => {
+    setSelectMode(!!v);
+    if (!v) setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    if (!selectedIds.size) return;
+    const ids = [...selectedIds];
+    try {
+      await deleteConversations(ids);
+    } catch {
+      /* remove locally regardless */
+    }
+    const gone = new Set(ids);
+    setThreads((prev) => prev.filter((t) => !gone.has(t.id)));
+    threadsRef.current = threadsRef.current.filter((t) => !gone.has(t.id));
+    for (const id of ids) delete msgsCache.current[id];
+    if (activeId && gone.has(activeId)) {
+      activeIdRef.current = null;
+      setActiveId(null);
+      setMessages([]);
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    toast(T('Conversations deleted', '对话已删除'), 'success');
   };
 
   const openDetails = () => {
@@ -697,9 +915,12 @@ export default function DashboardPage() {
       setMobileView('list');
       setComposing(false);
       setKeypadOpen(false);
-    } else if (key === 'numbers') {
-      setTab('numbers');
+    } else if (key === 'calls') {
+      setTab('messages');
+      setNav('calls');
       setMobileView('list');
+      setComposing(false);
+      setKeypadOpen(false);
     } else if (key === 'settings') {
       setTab('messages');
       setMobileView('list');
@@ -707,35 +928,95 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDesktopSidebar = (k) => {
+    setTab('messages');
+    setNav(k);
+  };
+
+  // ----- Device/browser back handling -----
+  // The dashboard is a single route with internal views (tabs, nav, mobile
+  // thread/details, keypad, drawers, modals). We keep exactly one extra
+  // history entry above the app's base entry while any in-app view is open,
+  // so the device back button walks back through those views instead of
+  // leaving the app (which used to land on /login and look like a logout).
+  const pushedRef = useRef(false);
+  const cleanupRef = useRef(false);
+  const backStepRef = useRef(() => {});
+  const backDepth =
+    (searchOpen ? 1 : 0) +
+    (navOpen ? 1 : 0) +
+    (keypadOpen ? 1 : 0) +
+    (senderSheetOpen ? 1 : 0) +
+    (blastOpen ? 1 : 0) +
+    (settingsOpen ? 1 : 0) +
+    (detailsSheetOpen ? 1 : 0) +
+    (detailsOpen ? 1 : 0) +
+    (composing ? 1 : 0) +
+    (call ? 1 : 0) +
+    (isMobile && (mobileView === 'details' || mobileView === 'thread') ? 1 : 0) +
+    (nav !== 'messages' ? 1 : 0) +
+    (tab !== 'messages' ? 1 : 0);
+
+  backStepRef.current = () => {
+    if (searchOpen) { setSearchOpen(false); return; }
+    if (navOpen) { setNavOpen(false); return; }
+    if (keypadOpen) { setKeypadOpen(false); return; }
+    if (senderSheetOpen) { setSenderSheetOpen(false); return; }
+    if (blastOpen) { setBlastOpen(false); return; }
+    if (settingsOpen) { setSettingsOpen(false); return; }
+    if (detailsSheetOpen) { setDetailsSheetOpen(false); return; }
+    if (detailsOpen) { setDetailsOpen(false); return; }
+    if (call) { endCall(); return; }
+    if (isMobile && mobileView === 'details') { setMobileView('thread'); return; }
+    if (isMobile && mobileView === 'thread') { setMobileView('list'); setComposing(false); setKeypadOpen(false); return; }
+    if (composing) { setComposing(false); return; }
+    if (nav !== 'messages') { setNav('messages'); setTab('messages'); return; }
+    if (tab !== 'messages') { setTab('messages'); return; }
+  };
+
+  useEffect(() => {
+    if (!(window.history.state && window.history.state.__nexsms)) {
+      window.history.replaceState({ __nexsms: 1 }, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (backDepth > 0 && !pushedRef.current) {
+      pushedRef.current = true;
+      try {
+        window.history.pushState({ __nexsms: 1 }, '', window.location.pathname + window.location.search);
+      } catch {
+        pushedRef.current = false;
+      }
+    } else if (backDepth === 0 && pushedRef.current) {
+      pushedRef.current = false;
+      if (window.history.state && window.history.state.__nexsms) {
+        cleanupRef.current = true;
+        window.history.back();
+      }
+    }
+  }, [backDepth]);
+
+  useEffect(() => {
+    const onPop = () => {
+      if (cleanupRef.current) {
+        cleanupRef.current = false;
+        return;
+      }
+      if (window.history.state && window.history.state.__nexsms) {
+        pushedRef.current = false;
+        if (backStepRef.current) backStepRef.current();
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const chatGridCls = 'chat-grid flex flex-1 relative min-w-0';
 
   const renderChatArea = () => (
     <div className={chatGridCls}>
-      {isMobile ? (
-        navOpen && (
-          <NavSidebar
-            active={nav}
-            onChange={(k) => {
-              if (['billing', 'api', 'account'].includes(k)) setTab(k);
-              else setNav(k);
-              setNavOpen(false);
-              setMobileView('list');
-              setBnav('home');
-            }}
-            collapsed={false}
-            drawer
-            onClose={() => setNavOpen(false)}
-            extraItems={[
-              { key: 'numbers', label: 'Numbers', zh: '号码' },
-              { key: 'billing', label: 'Billing', zh: '账单' },
-              { key: 'api', label: 'API', zh: 'API' },
-              { key: 'account', label: 'Account', zh: '账户' },
-            ]}
-          />
-        )
-      ) : (
-        <NavSidebar active={nav} onChange={setNav} collapsed={navCollapsed} />
-      )}
+      {!isMobile && <NavSidebar active={nav} onChange={handleDesktopSidebar} collapsed={navCollapsed} />}
       {nav === 'messages' ? (
         isMobile || !listCollapsed ? (
           <ConversationList
@@ -749,6 +1030,14 @@ export default function DashboardPage() {
             onRetry={refreshConversations}
             onCollapse={isMobile ? undefined : () => setListCollapsed(true)}
             hidden={isMobile && mobileView === 'thread'}
+            isMobile={isMobile}
+            selectable={selectMode}
+            selected={selectedIds}
+            onToggleSelect={toggleSelect}
+            onSelectMode={toggleSelectMode}
+            onSelectAll={(ids) => setSelectedIds(new Set(ids))}
+            onBulkDelete={bulkDelete}
+            onCancelSelect={() => toggleSelectMode(false)}
           />
         ) : (
           <div className="w-11 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-start justify-center py-4 animate-fade">
@@ -763,9 +1052,9 @@ export default function DashboardPage() {
           </div>
         )
       ) : nav === 'calls' ? (
-        <CallsPanel onPick={(name) => { setDialInput(name); setNav('messages'); startNewThread(name); }} hidden={isMobile && mobileView === 'thread'} />
+        <CallsPanel calls={callLog} onCall={startCall} onPick={(name) => { setDialInput(name); setNav('messages'); startNewThread(name); }} hidden={isMobile && mobileView === 'thread'} />
       ) : nav === 'contacts' ? (
-        <ContactsPanel threads={threads} onSelect={selectThread} hidden={isMobile && mobileView === 'thread'} />
+        <ContactsPanel threads={threads} onSelect={selectThread} onStartNew={startNewThread} hidden={isMobile && mobileView === 'thread'} />
       ) : (
         <EmptyListPanel kind={nav} hidden={isMobile && mobileView === 'thread'} />
       )}
@@ -792,6 +1081,9 @@ export default function DashboardPage() {
           messagesError={!!messagesError}
           onRetryMessages={() => activeId && loadMessages(activeId)}
           onDeleteMessage={removeMessage}
+          onPin={handlePin}
+          onFavorite={handleFavorite}
+          onReact={handleReact}
           isMobile={isMobile}
           hidden={isMobile && mobileView === 'list'}
         />
@@ -807,6 +1099,7 @@ export default function DashboardPage() {
           assignedNumber={active.assignedNumber}
           onBack={handleMobileBack}
           onMessage={() => setDetailsOpen(false)}
+          onCall={startCall}
           onClose={() => setDetailsOpen(false)}
         />
       )}
@@ -825,7 +1118,7 @@ export default function DashboardPage() {
         onSelectMatch={selectThread}
         onStartNew={() => startNewThread(dialInput.trim())}
         onDial={() => {
-          if (dialInput.trim()) setNav('calls');
+          if (dialInput.trim()) startCall(dialInput.trim());
         }}
       />
       {isMobile && !keypadOpen && nav === 'messages' && mobileView === 'list' && (
@@ -845,16 +1138,18 @@ export default function DashboardPage() {
 
   return (
     <div className="app-shell bg-white dark:bg-slate-900">
-      <header className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0">
+      <header className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 sm:gap-3 px-2 sm:px-3 bg-white dark:bg-slate-900 shrink-0 min-w-0 overflow-x-clip">
         <button
           onClick={() => (isMobile ? setNavOpen(true) : setNavCollapsed((v) => !v))}
-          className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-lg transition"
+          className="w-10 h-10 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-lg transition"
           title="Menu"
           aria-label="Menu"
         >
           ≡
         </button>
-        <span className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
+        <span className="hidden min-[390px]:flex w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-primary to-secondary items-center justify-center text-white font-bold text-sm">
+          {theme.logo ? <img src={theme.logo} alt="" className="w-4 h-4 object-contain" /> : (theme.siteName || 'NexSMS').charAt(0)}
+        </span>
         {!isMobile && <span className="font-semibold text-slate-900 dark:text-white hidden md:block">{theme.siteName}</span>}
 
         <div className="flex-1 flex justify-center px-2 min-w-0">
@@ -864,22 +1159,16 @@ export default function DashboardPage() {
                 setSearchInput(search);
                 setSearchOpen(true);
               }}
-              className="w-11 h-11 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+              className="w-10 h-10 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
               title={T('Search', '搜索')}
               aria-label={T('Search', '搜索')}
             >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <IconSearch className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           )}
           {!isMobile && (
             <div className="hidden md:flex w-full max-w-xl items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:ring-2 focus-within:ring-primary/40 border border-transparent focus-within:border-primary transition">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <IconSearch className="w-4 h-4 shrink-0" strokeWidth={2} />
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
@@ -899,10 +1188,7 @@ export default function DashboardPage() {
                   title={T('Clear', '清除')}
                   aria-label={T('Clear search', '清除搜索')}
                 >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <IconClose className="w-4 h-4" strokeWidth={2.5} />
                 </button>
               )}
             </div>
@@ -925,28 +1211,31 @@ export default function DashboardPage() {
             </button>
           )}
           {!isMobile && <span className="hidden md:block text-sm font-semibold text-slate-700 dark:text-slate-300">${Number(user?.balance || 0).toFixed(2)}</span>}
+          {isMobile && tab === 'messages' && (
+            <button
+              onClick={() => setBlastOpen(true)}
+              className="shrink-0 px-2.5 sm:px-3 h-9 flex items-center justify-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition"
+              title={isZh ? '批量群发' : 'Bulk blast'}
+              aria-label={isZh ? '批量群发' : 'Bulk blast'}
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="m3 11 18-5v12L3 14v-3z" />
+                <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+              </svg>
+              <span className="hidden sm:inline">{isZh ? '群发' : 'Bulk'}</span>
+            </button>
+          )}
+          <NotificationBell onRefreshKey={notifTick} />
           <button
             onClick={() => setDark((v) => !v)}
-            className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+            className="w-10 h-10 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
             title={dark ? T('Light mode', '浅色模式') : T('Dark mode', '深色模式')}
             aria-label={dark ? T('Light mode', '浅色模式') : T('Dark mode', '深色模式')}
           >
             {dark ? (
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
+              <IconSun className="w-[18px] h-[18px]" strokeWidth={1.8} />
             ) : (
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
+              <IconMoon className="w-[18px] h-[18px]" strokeWidth={1.8} />
             )}
           </button>
           <button
@@ -954,16 +1243,13 @@ export default function DashboardPage() {
               setTab('messages');
               setSettingsOpen(true);
             }}
-            className="w-11 h-11 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+            className="w-10 h-10 md:w-9 md:h-9 shrink-0 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
             title={T('Settings', '设置')}
             aria-label={T('Settings', '设置')}
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <IconSettings className="w-[18px] h-[18px]" strokeWidth={1.8} />
           </button>
-          {user?.role === 'admin' && (
+          {!isMobile && user?.role === 'admin' && (
             <a
               href="/admin"
               className="px-3 min-h-11 flex items-center text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition"
@@ -1029,22 +1315,62 @@ export default function DashboardPage() {
 
       {tab === 'messages' ? (
         settingsOpen ? (
-          <SettingsView fromNumber={fromNumber} balance={user?.balance} onClose={() => setSettingsOpen(false)} />
+          <SettingsView fromNumber={fromNumber} balance={user?.balance} numbers={numbers} onClose={() => setSettingsOpen(false)} onOpenBilling={() => { setSettingsOpen(false); setTab('billing'); setNav('messages'); }} />
         ) : (
           renderChatArea()
         )
       ) : tab === 'numbers' ? (
-        <NumbersPanel />
+        <div className="flex flex-1 relative min-w-0 overflow-hidden">
+          {!isMobile && <NavSidebar active={nav} onChange={handleDesktopSidebar} collapsed={navCollapsed} />}
+          <NumbersPanel />
+        </div>
       ) : tab === 'billing' ? (
-        <BillingPanel />
+        <div className="flex flex-1 relative min-w-0 overflow-hidden">
+          {!isMobile && <NavSidebar active={nav} onChange={handleDesktopSidebar} collapsed={navCollapsed} />}
+          <BillingPanel />
+        </div>
       ) : tab === 'api' ? (
-        <ApiKeysPanel />
+        <div className="flex flex-1 relative min-w-0 overflow-hidden">
+          {!isMobile && <NavSidebar active={nav} onChange={handleDesktopSidebar} collapsed={navCollapsed} />}
+          <ApiKeysPanel />
+        </div>
       ) : (
-        <AccountPanel />
+        <div className="flex flex-1 relative min-w-0 overflow-hidden">
+          {!isMobile && <NavSidebar active={nav} onChange={handleDesktopSidebar} collapsed={navCollapsed} />}
+          <AccountPanel />
+        </div>
       )}
 
       {isMobile && !settingsOpen && !keypadOpen && mobileView === 'list' && (
         <MobileBottomNav active={bnav} onChange={handleBnav} unreadTotal={unreadTotal} />
+      )}
+
+      {isMobile && navOpen && (
+        <NavSidebar
+          active={nav}
+          onChange={(k) => {
+            if (k === 'admin') {
+              setNavOpen(false);
+              window.location.href = '/admin';
+              return;
+            }
+            if (['numbers', 'billing', 'api', 'account'].includes(k)) setTab(k);
+            else setNav(k);
+            setNavOpen(false);
+            setMobileView('list');
+            setBnav('home');
+          }}
+          collapsed={false}
+          drawer
+          onClose={() => setNavOpen(false)}
+          extraItems={[
+            { key: 'numbers', label: 'Numbers', zh: '号码' },
+            { key: 'billing', label: 'Billing', zh: '账单' },
+            { key: 'api', label: 'API', zh: 'API' },
+            { key: 'account', label: 'Account', zh: '账户' },
+            ...(user?.role === 'admin' ? [{ key: 'admin', label: 'Admin', zh: '管理' }] : []),
+          ]}
+        />
       )}
 
       <SenderNumberSheet
@@ -1071,6 +1397,7 @@ export default function DashboardPage() {
           assignedNumber={active.assignedNumber}
           onBack={handleMobileBack}
           onMessage={() => setMobileView('thread')}
+          onCall={startCall}
           mobile
           onClose={() => setMobileView('thread')}
         />
@@ -1084,11 +1411,14 @@ export default function DashboardPage() {
           mobile
           onBack={() => setDetailsSheetOpen(false)}
           onMessage={() => setDetailsSheetOpen(false)}
+          onCall={startCall}
           onClose={() => setDetailsSheetOpen(false)}
         />
       )}
 
       {blastOpen && <BlastModal onClose={() => setBlastOpen(false)} />}
+
+      {call && <CallScreen call={call} fromNumber={fromNumber} onEnd={endCall} />}
     </div>
   );
 }

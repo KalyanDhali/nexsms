@@ -41,7 +41,11 @@ export function ThemeProvider({ children }) {
     document.title = theme.siteName;
   }, [theme]);
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme: { ...theme, primary: theme.primaryColor, secondary: theme.secondaryColor }, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export const useTheme = () => useContext(ThemeContext);

@@ -290,6 +290,57 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_messages_provider_created ON messages (provider_id, created_at)`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_code_hash TEXT`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_code_expires_at TIMESTAMPTZ`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS favorite BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE messages ADD COLUMN IF NOT EXISTS reaction TEXT`,
+  `ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`,
+  `ALTER TABLE auto_reply_rules ADD COLUMN IF NOT EXISTS number_id UUID REFERENCES numbers(id) ON DELETE CASCADE`,
+  `ALTER TABLE numbers ADD COLUMN IF NOT EXISTS did_price NUMERIC(14,4)`,
+  `ALTER TABLE numbers ADD COLUMN IF NOT EXISTS did_lease_days INTEGER NOT NULL DEFAULT 30`,
+  `ALTER TABLE numbers ADD COLUMN IF NOT EXISTS did_note TEXT`,
+  `ALTER TABLE numbers ADD COLUMN IF NOT EXISTS last_renewed_at TIMESTAMPTZ`,
+  `CREATE TABLE IF NOT EXISTS daily_bonus_claims (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    claim_date DATE NOT NULL,
+    amount NUMERIC(14,4) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, claim_date)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_inbound_unread ON messages (conversation_id, direction) WHERE direction = 'in' AND read_at IS NULL`,
+  `CREATE TABLE IF NOT EXISTS contacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT,
+    phone TEXT NOT NULL,
+    email TEXT,
+    company TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_contacts_user_phone ON contacts (user_id, phone)`,
+  `CREATE TABLE IF NOT EXISTS contact_groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_contact_groups_user ON contact_groups (user_id)`,
+  `CREATE TABLE IF NOT EXISTS contact_group_members (
+    contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    group_id UUID NOT NULL REFERENCES contact_groups(id) ON DELETE CASCADE,
+    PRIMARY KEY (contact_id, group_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_contact_group_members_group ON contact_group_members (group_id)`,
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications (user_id, read, created_at DESC)`,
 ];
 
 export async function runMigrations() {

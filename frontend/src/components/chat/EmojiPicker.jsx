@@ -930,37 +930,45 @@ export default function EmojiPicker({ onSelect, onClose }) {
   };
 
   return (
-    <div className="absolute bottom-full mb-2 right-0 w-[340px] max-w-[calc(100vw-24px)] max-h-[360px] bg-white rounded-xl shadow-xl border border-gray-200 z-30 flex flex-col overflow-hidden">
-      <div className="p-2 border-b border-gray-100 shrink-0">
-        <div className="flex items-center gap-2 bg-[#f1f3f4] rounded-full px-3 py-1.5">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div className="fixed bottom-16 right-2 z-40 w-[292px] max-w-[calc(100vw-20px)] max-h-[312px] origin-bottom-right animate-emoji-pop bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-black/15 dark:shadow-black/40 ring-1 ring-black/5 dark:ring-white/10 flex flex-col overflow-hidden md:absolute md:bottom-full md:mb-3 md:right-0 md:origin-bottom-right">
+      <div className="flex items-center gap-2 px-3 pt-2.5 pb-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 shrink-0">
+          {query ? 'Search' : 'Emoji'}
+        </span>
+        <div className="flex-1 flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5 transition focus-within:ring-2 focus-within:ring-emerald-500/30">
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search emoji"
-            className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-400"
+            placeholder="Search"
+            className="w-full bg-transparent outline-none text-sm text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
             autoFocus
           />
           {query && (
-            <button type="button" onClick={() => setQuery('')} className="text-gray-400 hover:text-gray-600 text-lg leading-none">
+            <button type="button" onClick={() => setQuery('')} className="text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 text-base leading-none shrink-0" aria-label="Clear search">
               ×
             </button>
           )}
         </div>
+        {onClose && (
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 text-lg leading-none shrink-0 px-0.5" aria-label="Close emoji">
+            ×
+          </button>
+        )}
       </div>
-      <div className="overflow-y-auto p-2 grid grid-cols-10 gap-0.5 min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 p-2 grid grid-cols-8 gap-0.5 content-start">
         {filtered.length === 0 && (
-          <div className="col-span-10 text-center text-sm text-gray-400 py-6">No emoji found</div>
+          <div className="col-span-8 text-center text-sm text-gray-400 dark:text-slate-500 py-6">No emoji found</div>
         )}
         {filtered.map((item) => (
           <button
             key={item.e}
             type="button"
             onClick={() => pick(item)}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-lg transition"
+            className="w-full h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-110 transition-all duration-100 flex items-center justify-center text-base"
             title={item.k}
           >
             {item.e}

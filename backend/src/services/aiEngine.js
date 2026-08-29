@@ -19,16 +19,24 @@ export function categorizeMessage(body = '') {
   return 'general';
 }
 
-/** First enabled rule whose keyword appears in the body. */
-export async function findAutoReply(userId, body = '') {
+/** First enabled rule whose keyword appears in the body.
+ *  When numberId is given, rules scoped to that number OR global rules
+ *  (number_id IS NULL) match. Otherwise only global rules apply. */
+export async function findAutoReply(userId, body = '', numberId = null) {
   const { rows: toggles } = await query(`SELECT enabled FROM feature_toggles WHERE key = 'ai_features'`);
   if (!toggles.length || !toggles[0].enabled) return null;
 
-  const { rows: rules } = await query(
-    `SELECT trigger_keyword, reply FROM auto_reply_rules
-     WHERE user_id = $1 AND enabled = TRUE`,
-    [userId]
-  );
+  const params = [userId];
+  let sql = `SELECT trigger_keyword, reply FROM auto_reply_rules
+             WHERE user_id = $1 AND enabled = TRUE`;
+  if (numberId) {
+    params.push(numberId);
+    sql += ` AND (number_id = $2 OR number_id IS NULL)`;
+  } else {
+    sql += ` AND number_id IS NULL`;
+  }
+
+  const { rows: rules } = await query(sql, params);
   const text = body.toLowerCase();
   const hit = rules.find((r) => text.includes(r.trigger_keyword.toLowerCase()));
   return hit ? hit.reply : null;

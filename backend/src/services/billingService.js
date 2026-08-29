@@ -146,6 +146,21 @@ export async function confirmPaymentOrder(orderId, { txid = null, confirmations 
     const bonus = await grantReferralBonus(order.user_id, Number(order.amount));
     if (bonus) outcome.referralBonus = bonus;
   }
+
+  try {
+    const { createNotification } = await import('./notificationService.js');
+    await createNotification({
+      userId: order.user_id,
+      type: 'payment',
+      title: `Deposit of $${Number(order.amount).toFixed(2)} confirmed`,
+      body: order.reference && order.reference.startsWith('sub:')
+        ? 'Your subscription has been activated.'
+        : 'Your balance has been credited.',
+    });
+  } catch {
+    // non-fatal
+  }
+
   return { order: { ...order, status: 'completed' }, outcome, warning: flash.warning || null };
 }
 

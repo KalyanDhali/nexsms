@@ -210,7 +210,8 @@ router.delete('/fraud/blocklist/:ip', async (req, res) => {
 
 // Analytics
 router.get('/analytics', async (req, res) => {
-  const [total, providers, daily, topUsers] = await Promise.all([
+  try {
+    const [total, providers, daily, topUsers, byStatus, topNumbers] = await Promise.all([
     query(
       `SELECT COUNT(*)::int AS count,
               COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered,
@@ -226,7 +227,9 @@ router.get('/analytics', async (req, res) => {
     query(
       `SELECT to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS day,
               COUNT(*)::int AS count,
-              COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered
+              COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered,
+              COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+              COALESCE(SUM(cost),0)::numeric AS cost
        FROM messages WHERE created_at >= NOW() - interval '14 days'
        GROUP BY day ORDER BY day`
     ),
@@ -235,13 +238,30 @@ router.get('/analytics', async (req, res) => {
        FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN users u ON u.id = c.user_id
        GROUP BY u.email ORDER BY messages DESC LIMIT 10`
     ),
+    query(
+      `SELECT status, COUNT(*)::int AS count
+       FROM messages GROUP BY status ORDER BY count DESC`
+    ),
+    query(
+      `SELECT c.contact_number AS number, COUNT(*)::int AS count,
+              COALESCE(SUM(m.cost),0)::numeric AS cost
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.contact_number IS NOT NULL
+       GROUP BY c.contact_number ORDER BY count DESC LIMIT 5`
+    ),
   ]);
-  res.json({
-    totals: total.rows[0],
-    providers: providers.rows,
-    daily: daily.rows,
-    topUsers: topUsers.rows,
-  });
+    res.json({
+      totals: total.rows[0],
+      providers: providers.rows,
+      daily: daily.rows,
+      topUsers: topUsers.rows,
+      byStatus: byStatus.rows,
+      topNumbers: topNumbers.rows,
+    });
+  } catch (err) {
+    console.error('admin analytics error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // Admin: manage user API keys
@@ -296,6 +316,17 @@ router.post('/kyc/:id/approve', async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: 'Submission not found or already reviewed' });
   await query(`UPDATE users SET kyc_status = 'verified', updated_at = NOW() WHERE id = $1`, [rows[0].user_id]);
+  try {
+    const { createNotification } = await import('../services/notificationService.js');
+    await createNotification({
+      userId: rows[0].user_id,
+      type: 'kyc',
+      title: 'Identity verified',
+      body: 'Your identity verification has been approved.',
+    });
+  } catch {
+    // non-fatal
+  }
   res.json({ ok: true });
 });
 
@@ -308,6 +339,17 @@ router.post('/kyc/:id/reject', async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: 'Submission not found or already reviewed' });
   await query(`UPDATE users SET kyc_status = 'rejected', updated_at = NOW() WHERE id = $1`, [rows[0].user_id]);
+  try {
+    const { createNotification } = await import('../services/notificationService.js');
+    await createNotification({
+      userId: rows[0].user_id,
+      type: 'kyc',
+      title: 'Identity verification rejected',
+      body: note || 'Your identity verification was rejected. Please resubmit.',
+    });
+  } catch {
+    // non-fatal
+  }
   res.json({ ok: true });
 });
 

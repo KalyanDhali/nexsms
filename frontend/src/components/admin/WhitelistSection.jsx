@@ -59,13 +59,13 @@ export default function WhitelistSection() {
             value={ip}
             onChange={(e) => setIp(e.target.value)}
             placeholder={T('IP address (e.g. 203.0.113.7)', 'IP 地址（如 203.0.113.7）')}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2"
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2"
           />
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={T('Note', '备注')}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2"
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2"
           />
           <button onClick={add} className="px-4 py-2 text-sm text-white rounded-lg font-medium hover:opacity-90 transition bg-indigo-600">
             {T('Add', '添加')}
@@ -74,11 +74,11 @@ export default function WhitelistSection() {
       </Card>
       <Card>
         {!ips.length ? (
-          <p className="text-sm text-slate-400">{T('No IPs whitelisted. Warning: enabling the toggle with an empty list locks out all admin access.', '白名单为空。警告：启用开关但列表为空将锁定所有管理访问。')}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">{T('No IPs whitelisted. Warning: enabling the toggle with an empty list locks out all admin access.', '白名单为空。警告：启用开关但列表为空将锁定所有管理访问。')}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-100">
+              <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
                 <th className="py-2 font-medium">{T('IP', 'IP')}</th>
                 <th className="py-2 font-medium">{T('Note', '备注')}</th>
                 <th className="py-2 font-medium">{T('Added', '添加时间')}</th>
@@ -88,9 +88,9 @@ export default function WhitelistSection() {
             <tbody>
               {ips.map((entry) => (
                 <tr key={entry.ip} className="border-b border-slate-50">
-                  <td className="py-2 font-mono text-slate-800">{entry.ip}</td>
-                  <td className="py-2 text-slate-500">{entry.note || '—'}</td>
-                  <td className="py-2 text-xs text-slate-400">{new Date(entry.created_at).toLocaleString()}</td>
+                  <td className="py-2 font-mono text-slate-800 dark:text-slate-100">{entry.ip}</td>
+                  <td className="py-2 text-slate-500 dark:text-slate-400">{entry.note || '—'}</td>
+                  <td className="py-2 text-xs text-slate-400 dark:text-slate-500">{new Date(entry.created_at).toLocaleString()}</td>
                   <td className="py-2 text-right">
                     <button onClick={() => remove(entry)} className="text-xs text-red-500 hover:text-red-700">{T('Remove', '移除')}</button>
                   </td>

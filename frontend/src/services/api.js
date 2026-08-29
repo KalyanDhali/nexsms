@@ -41,6 +41,12 @@ export const getMyNumbers = () => api.get('/numbers/mine');
 export const setPrimaryNumber = (id) => api.patch(`/numbers/${id}/primary`);
 export const getAvailableNumbers = (params) => api.get('/numbers/available', { params });
 
+export const getDidStore = (params) => api.get('/numbers/did/store', { params });
+export const rentDidNumber = (id) => api.post(`/numbers/did/${id}/rent`);
+export const renewDidNumber = (id) => api.post(`/numbers/did/${id}/renew`);
+export const releaseDidNumber = (id) => api.post(`/numbers/did/${id}/release`);
+export const updateNumberPricing = (id, payload) => api.patch(`/numbers/${id}/pricing`, payload);
+
 export const getPlans = () => api.get('/plans');
 export const getBillingSettings = () => api.get('/billing/settings');
 export const getWallet = () => api.get('/billing/wallet');
@@ -77,6 +83,8 @@ export const revokeApiKey = (id) => api.post(`/keys/${id}/revoke`);
 export const getKyc = () => api.get('/kyc');
 export const submitKyc = (payload) => api.post('/kyc', payload);
 export const getReferral = () => api.get('/kyc/referral');
+export const getBonusStatus = () => api.get('/billing/bonus/status');
+export const claimBonus = () => api.post('/billing/bonus/claim');
 export const adminGetKyc = (params) => api.get('/admin/kyc', { params });
 export const adminApproveKyc = (id) => api.post(`/admin/kyc/${id}/approve`);
 export const adminRejectKyc = (id, payload) => api.post(`/admin/kyc/${id}/reject`, payload);
@@ -121,6 +129,7 @@ export const getConversations = () => api.get('/messages/conversations');
 export const getConversationMessages = (id, params) => api.get(`/messages/conversations/${id}/messages`, { params });
 export const getMessageDetails = (id) => api.get(`/messages/${id}`);
 export const deleteMessage = (id) => api.delete(`/messages/${id}`);
+export const deleteConversations = (ids) => api.delete('/messages/conversations', { data: { ids } });
 export const getScheduledMessages = () => api.get('/messages/scheduled');
 export const cancelScheduledMessage = (id) => api.post(`/messages/scheduled/${id}/cancel`);
 export const createConversation = (payload) => api.post('/messages/conversations', payload);
@@ -128,6 +137,11 @@ export const sendSms = (payload) => api.post('/messages/send', payload);
 export const getUserAnalytics = () => api.get('/messages/analytics');
 export const sendBlast = (payload) => api.post('/messages/blast', payload);
 export const uploadSmsImage = (payload) => api.post('/uploads', payload);
+export const pinConversation = (id, pinned) => api.post(`/messages/conversations/${id}/pin`, { pinned });
+export const favoriteConversation = (id, favorite) => api.post(`/messages/conversations/${id}/favorite`, { favorite });
+export const reactToMessage = (id, reaction) => api.post(`/messages/${id}/reaction`, { reaction });
+export const searchConversationMessages = (id, q) => api.get(`/messages/conversations/${id}/search`, { params: { q } });
+export const exportConversation = (id, format) => api.get(`/messages/conversations/${id}/export`, { params: { format }, responseType: 'blob' });
 
 export const getAdminAnalytics = () => api.get('/admin/analytics');
 export const getAdminApiKeys = () => api.get('/admin/keys');
@@ -141,3 +155,17 @@ export const changePassword = (payload) => api.post('/auth/change-password', pay
 export const sendTwoFactorCode = () => api.post('/auth/2fa/send-code');
 export const verifyTwoFactorCode = (payload) => api.post('/auth/2fa/verify-code', payload);
 export const verifyTwoFactorLogin = (payload) => api.post('/auth/2fa/verify-login', payload);
+
+export const getContacts = (q) => api.get('/contacts', { params: q ? { q } : {} });
+export const createContact = (payload) => api.post('/contacts', payload);
+export const updateContact = (id, payload) => api.put(`/contacts/${id}`, payload);
+export const deleteContact = (id) => api.delete(`/contacts/${id}`);
+export const importContacts = (contacts) => api.post('/contacts/import', { contacts });
+export const getContactGroups = () => api.get('/contacts/groups');
+export const createContactGroup = (name) => api.post('/contacts/groups', { name });
+export const deleteContactGroup = (id) => api.delete(`/contacts/groups/${id}`);
+export const blastContactGroup = (id, payload) => api.post(`/contacts/groups/${id}/blast`, payload);
+
+export const getNotifications = () => api.get('/notifications');
+export const markAllNotificationsRead = () => api.post('/notifications/read-all');
+export const markNotificationRead = (id) => api.post(`/notifications/${id}/read`);

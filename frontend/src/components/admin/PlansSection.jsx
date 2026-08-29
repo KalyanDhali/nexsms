@@ -106,12 +106,12 @@ export default function PlansSection() {
         {plans.map((p) => (
           <tr key={p.id}>
             <td className="px-4 py-3">
-              <div className="font-medium text-slate-900">{p.name}</div>
-              <div className="text-xs text-slate-400">{p.slug}</div>
+              <div className="font-medium text-slate-900 dark:text-white">{p.name}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">{p.slug}</div>
             </td>
             <td className="px-4 py-3 font-medium">${Number(p.price).toFixed(2)}</td>
-            <td className="px-4 py-3 text-slate-500">{p.sms_quota}</td>
-            <td className="px-4 py-3 text-slate-500">{p.daily_limit_per_number}</td>
+            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{p.sms_quota}</td>
+            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{p.daily_limit_per_number}</td>
             <td className="px-4 py-3"><Badge color={p.active ? 'green' : 'slate'}>{p.active ? T('Active', '启用') : T('Inactive', '禁用')}</Badge></td>
             <td className="px-4 py-3">
               <div className="flex gap-1.5">

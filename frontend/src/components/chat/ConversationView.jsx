@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { uploadSmsImage, getMessageDetails, deleteMessage } from '../../services/api.js';
+import { uploadSmsImage, getMessageDetails, deleteMessage, reactToMessage, searchConversationMessages, exportConversation, cancelScheduledMessage } from '../../services/api.js';
 
 import BottomSheet from './BottomSheet.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import Avatar from './Avatar.jsx';
+import { IconBack, IconShield, IconMessages, IconDownload, IconCopy, IconRefresh, IconInfo, IconTrash, IconSearch } from '../icons.jsx';
 
 const MAX_RECIPIENTS = 5;
 const MAX_COMPOSE_HEIGHT = 120;
@@ -45,6 +46,9 @@ export default function ConversationView({
   messagesError = false,
   onRetryMessages,
   onDeleteMessage,
+  onPin,
+  onFavorite,
+  onReact,
   hidden,
   isMobile = false,
 }) {
@@ -114,6 +118,33 @@ export default function ConversationView({
   const loadingOlderRef = useRef(false);
   const pressTimer = useRef(null);
   const longPressedRef = useRef(false);
+  const msgEls = useRef({});
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);
+  const [reactFor, setReactFor] = useState(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduling, setScheduling] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef(null);
+  const searchToggleRef = useRef(null);
+  const searchPanelRef = useRef(null);
+  const scheduleToggleRef = useRef(null);
+  const schedulePanelRef = useRef(null);
+
+  const REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
+
+  useEffect(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setHighlightId(null);
+    setScheduleOpen(false);
+    setScheduleAt('');
+  }, [thread?.id]);
 
   useEffect(() => {
     if (!composing) setRecipients([]);
@@ -199,6 +230,24 @@ export default function ConversationView({
     return () => document.removeEventListener('mousedown', handler);
   }, [emojiOpen]);
 
+  useEffect(() => {
+    const isIn = (ref, t) => ref.current && ref.current.contains(t);
+    const handler = (e) => {
+      if (exportOpen && !isIn(exportRef, e.target)) setExportOpen(false);
+      if (searchOpen && !isIn(searchToggleRef, e.target) && !isIn(searchPanelRef, e.target)) {
+        setSearchOpen(false);
+        setSearchQuery('');
+        setSearchResults([]);
+      }
+      if (scheduleOpen && !isIn(scheduleToggleRef, e.target) && !isIn(schedulePanelRef, e.target)) {
+        setScheduleOpen(false);
+        setScheduleAt('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportOpen, searchOpen, scheduleOpen]);
+
   const openActions = (msg) => {
     setDeleteArmed(false);
     setActionsFor(msg);
@@ -272,6 +321,99 @@ export default function ConversationView({
     onTouchMove: () => clearTimeout(pressTimer.current),
     onTouchEnd: () => clearTimeout(pressTimer.current),
   });
+
+  const toggleSearch = () => {
+    setSearchOpen((v) => !v);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const doSearch = async (q) => {
+    setSearchQuery(q);
+    if (!thread || !q.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const { data } = await searchConversationMessages(thread.id, q.trim());
+      setSearchResults(data.results || []);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const goToMessage = (id) => {
+    const el = msgEls.current[id];
+    if (!el || !scrollRef.current) return;
+    scrollRef.current.scrollTo({ top: Math.max(0, el.offsetTop - scrollRef.current.offsetTop - 24), behavior: 'smooth' });
+    setHighlightId(id);
+    setTimeout(() => setHighlightId(null), 2200);
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const toggleReaction = async (msg, emoji) => {
+    const next = msg.reaction === emoji ? null : emoji;
+    setReactFor(null);
+    closeActions();
+    try {
+      await reactToMessage(msg.id, next);
+      if (onReact) onReact(msg.id, next);
+      toast(next ? T('Reaction added', '已添加表情回应') : T('Reaction removed', '已移除表情回应'), 'success');
+    } catch {
+      toast(T('Could not add reaction', '无法添加表情回应'), 'error');
+    }
+  };
+
+  const doExport = async (format) => {
+    setExportOpen(false);
+    if (!thread) return;
+    try {
+      const { data } = await exportConversation(thread.id, format);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `conversation-${(thread.contactNumber || 'chat').replace(/[^0-9]/g, '')}.${format === 'csv' ? 'csv' : 'txt'}`;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast(T('Conversation exported', '对话已导出'), 'success');
+    } catch {
+      toast(T('Export failed', '导出失败'), 'error');
+    }
+  };
+
+  const cancelSchedule = async (msg) => {
+    try {
+      await cancelScheduledMessage(msg.id);
+      if (onDeleteMessage) onDeleteMessage(msg.id);
+      toast(T('Scheduled message cancelled', '已取消定时消息'), 'success');
+    } catch {
+      toast(T('Cancel failed', '取消失败'), 'error');
+    }
+    closeActions();
+  };
+
+  const toggleSchedule = () => {
+    setScheduleOpen((v) => !v);
+    if (!scheduleAt) {
+      const d = new Date(Date.now() + 60 * 60 * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      setScheduleAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    }
+  };
+
+  const isFuture = (v) => {
+    const d = new Date(v);
+    return !Number.isNaN(d.getTime()) && d.getTime() > Date.now() + 30000;
+  };
 
   const autosize = () => {
     const el = textareaRef.current;
@@ -407,14 +549,21 @@ export default function ConversationView({
     if (!(draft.trim() || mediaUrl.trim()) || sending) return;
     const body = draft;
     const url = mediaUrl.trim() || null;
+    const scheduledAt = scheduleOpen && isFuture(scheduleAt) ? new Date(scheduleAt).toISOString() : null;
+    if (!scheduledAt && scheduleOpen) {
+      toast(T('Pick a future time', '请选择未来的时间'), 'error');
+      return;
+    }
     setSending(true);
     try {
-      await onSend(body, url);
+      await onSend(body, url, scheduledAt);
     } finally {
       setSending(false);
     }
     setDraft('');
     setMediaUrl('');
+    setScheduleOpen(false);
+    setScheduleAt('');
     if (pendingUrl) URL.revokeObjectURL(pendingUrl);
     setPendingUrl('');
     requestAnimationFrame(() => {
@@ -449,7 +598,8 @@ export default function ConversationView({
 
   const canSend = !sending && !uploading;
 
-  const statusTicks = (status) => {
+  const statusTicks = (msg) => {
+    const status = msg.status;
     if (status === 'failed') {
       return (
         <span className="inline-flex items-center text-rose-300" title={T('Failed', '失败')}>
@@ -461,10 +611,24 @@ export default function ConversationView({
         </span>
       );
     }
-    const delivered = status === 'delivered' || status === 'read';
-    const pending = status === 'pending' || status === 'scheduled';
+    if (status === 'scheduled') {
+      return (
+        <span className="inline-flex items-center text-white/75" title={T('Scheduled', '已定时')}>
+          <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </span>
+      );
+    }
+    const read = Boolean(msg.readAt) || status === 'read';
+    const delivered = status === 'delivered' || status === 'read' || read;
+    const pending = status === 'pending';
     return (
-      <span className={`inline-flex items-center gap-px ${delivered ? 'text-sky-300' : pending ? 'text-white/60' : 'text-white/85'}`} title={status}>
+      <span
+        className={`inline-flex items-center gap-px ${read ? 'text-sky-300' : delivered ? 'text-sky-300' : pending ? 'text-white/60' : 'text-white/85'}`}
+        title={read ? T('Read', '已读') : delivered ? T('Delivered', '已送达') : pending ? T('Sending…', '发送中…') : T('Sent', '已发送')}
+      >
         <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
@@ -480,7 +644,16 @@ export default function ConversationView({
   const messageMeta = (msg) => (
     <span className={`inline-flex items-center gap-1 text-[10px] ${msg.direction === 'out' ? 'text-white/70 dark:text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
       <span>{msg.time}</span>
-      {msg.direction === 'out' && msg.status && statusTicks(msg.status)}
+      {msg.direction === 'out' && msg.status && statusTicks(msg)}
+      {msg.status === 'scheduled' && (
+        <span className="inline-flex items-center gap-0.5 uppercase tracking-wide text-[9px] opacity-80">
+          <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          {T('Scheduled', '已定时')}
+        </span>
+      )}
       <button
         type="button"
         onClick={(e) => {
@@ -520,10 +693,23 @@ export default function ConversationView({
 
   const renderBubble = (msg) => {
     const isOut = msg.direction === 'out';
+    const hl = highlightId === msg.id;
+    const registerEl = (el) => {
+      msgEls.current[msg.id] = el;
+    };
+    const reactionChip = msg.reaction ? (
+      <span
+        className={`absolute -bottom-3 ${isOut ? '-right-1' : '-left-1'} px-1.5 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm text-[13px] leading-none z-10`}
+        role="img"
+        aria-label={T('Reaction', '表情回应')}
+      >
+        {msg.reaction}
+      </span>
+    ) : null;
     if (msg.mediaUrl) {
       return (
-        <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`} data-testid="message-bubble" {...bubbleTouchProps(msg)}>
-          <div className="max-w-[78%] sm:max-w-[70%]">
+        <div className={`flex ${isOut ? 'justify-end' : 'justify-start'} ${hl ? 'rounded-2xl ring-2 ring-emerald-400/70 bg-emerald-400/10' : ''}`} data-testid="message-bubble" {...bubbleTouchProps(msg)} ref={registerEl}>
+          <div className="max-w-[78%] sm:max-w-[70%] relative">
             <div className="relative inline-block">
               <img
                 src={msg.mediaUrl}
@@ -556,6 +742,7 @@ export default function ConversationView({
                 </svg>
               </button>
             </div>
+            {reactionChip}
             {msg.body && (
               <div className={`mt-1.5 ${isOut ? 'text-right' : ''}`}>
                 <span
@@ -576,9 +763,9 @@ export default function ConversationView({
       );
     }
     return (
-      <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`} data-testid="message-bubble" {...bubbleTouchProps(msg)}>
+      <div className={`flex ${isOut ? 'justify-end' : 'justify-start'} ${hl ? 'rounded-2xl ring-2 ring-emerald-400/70 bg-emerald-400/10' : ''}`} data-testid="message-bubble" {...bubbleTouchProps(msg)} ref={registerEl}>
         <div
-          className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
+          className={`relative max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
             isOut
               ? 'bg-gradient-to-r from-primary to-secondary text-white rounded-br-sm'
               : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 rounded-bl-sm border border-slate-200 dark:border-slate-700'
@@ -586,6 +773,7 @@ export default function ConversationView({
         >
           <span className="whitespace-pre-wrap break-words">{msg.body}</span>
           <div className={`mt-1 flex items-center gap-1 justify-end`}>{messageMeta(msg)}</div>
+          {reactionChip}
           {isOut && msg.status === 'failed' && retryRow(msg)}
           {isOut && msg.status === 'failed' && (
             <div className="mt-1.5 text-[10px] leading-tight text-rose-500 dark:text-rose-400 truncate max-w-[220px]">
@@ -642,7 +830,33 @@ export default function ConversationView({
         </div>
       )}
       {uploadError && <div className="mb-2 text-xs text-rose-500">{uploadError}</div>}
-      <div className="flex items-end gap-1.5">
+      {scheduleOpen && (
+        <div ref={schedulePanelRef} className="mb-2 flex items-center gap-2 px-1 animate-fade">
+          <span className="shrink-0 w-7 h-7 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </span>
+          <input
+            type="datetime-local"
+            value={scheduleAt}
+            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+            onChange={(e) => setScheduleAt(e.target.value)}
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/30"
+            aria-label={T('Send later', '定时发送')}
+          />
+          <button
+            type="button"
+            onClick={toggleSchedule}
+            className="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center justify-center transition"
+            aria-label={T('Cancel schedule', '取消定时')}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <div className="flex items-end gap-1 sm:gap-1.5">
         <div className="relative shrink-0 self-end">
           <button
             type="button"
@@ -650,7 +864,7 @@ export default function ConversationView({
               setAttachOpen(true);
               setEmojiOpen(false);
             }}
-            className="w-11 h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"
+            className="w-10 h-10 md:w-11 md:h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"
             title={T('Attach', '添加附件')}
             aria-label={T('Attach', '添加附件')}
           >
@@ -665,7 +879,7 @@ export default function ConversationView({
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
 
-        <div className="flex-1 min-w-0 flex flex-col bg-slate-100 dark:bg-slate-800 rounded-3xl px-4 pt-2.5 pb-1 border border-slate-200 dark:border-slate-700 no-focus-ring">
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-100 dark:bg-slate-800 rounded-3xl px-3 sm:px-4 pt-2 sm:pt-2.5 pb-1 border border-slate-200 dark:border-slate-700 no-focus-ring">
           <textarea
             ref={textareaRef}
             rows={1}
@@ -702,7 +916,7 @@ export default function ConversationView({
               setEmojiOpen((v) => !v);
               setAttachOpen(false);
             }}
-            className="w-11 h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+            className="w-10 h-10 md:w-11 md:h-11 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
             title={T('Emoji', '表情')}
             aria-label={T('Emoji', '表情')}
           >
@@ -713,15 +927,34 @@ export default function ConversationView({
               <line x1="15" y1="9" x2="15.01" y2="9" />
             </svg>
           </button>
-          {emojiOpen && <EmojiPicker onSelect={(e) => setDraft((d) => d + e)} />}
+          {emojiOpen && <EmojiPicker onSelect={(e) => setDraft((d) => d + e)} onClose={() => setEmojiOpen(false)} />}
+        </div>
+
+        <div ref={scheduleToggleRef} className="relative shrink-0 self-end hidden min-[360px]:block">
+          <button
+            type="button"
+            onClick={toggleSchedule}
+            className={`w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition ${
+              scheduleOpen
+                ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400'
+                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+            }`}
+            title={T('Send later', '定时发送')}
+            aria-label={T('Send later', '定时发送')}
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
         </div>
 
         <button
           type="submit"
           disabled={!canSend || (!draft.trim() && !mediaUrl)}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition shrink-0 self-end ${
+          className={`w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition shrink-0 self-end ${
             canSend && (draft.trim() || mediaUrl)
-              ? 'bg-primary text-white hover:opacity-90 active:scale-95'
+              ? 'bg-gradient-to-r from-primary to-secondary text-white hover:opacity-90 active:scale-95'
               : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
           }`}
           title={T('Send', '发送')}
@@ -753,10 +986,7 @@ export default function ConversationView({
                 title={T('Back', '返回')}
                 aria-label={T('Back', '返回')}
               >
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="19" y1="12" x2="5" y2="12" />
-                  <polyline points="12 19 5 12 12 5" />
-                </svg>
+                <IconBack className="w-6 h-6" />
               </button>
             )}
             <span className="text-slate-700 dark:text-slate-200 font-medium mr-2 shrink-0 text-sm">{t('chat.to')}:</span>
@@ -833,9 +1063,7 @@ export default function ConversationView({
               className="shrink-0 flex items-center gap-1 px-2 h-7 rounded-full bg-primary/10 text-primary dark:text-indigo-300 text-[11px] font-medium transition hover:bg-primary/20"
               title={T('Change sender number', '更改发送号码')}
             >
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
+              <IconShield className="w-3.5 h-3.5" />
               {T('From: ', '发送自：')}
               <span className="max-w-[110px] truncate font-mono">{fromNumber || T('Pick', '选择')}</span>
             </button>
@@ -844,13 +1072,11 @@ export default function ConversationView({
           <div className="flex-1 w-full overflow-y-auto" />
 
           {recipients.length > 0 && composerBar(submitCompose, 'compose')}
-          {kbInset > 0 && <div className="w-full shrink-0" style={{ height: kbInset }} data-testid="kb-spacer" />}
+          <div className="w-full shrink-0 kb-spacer" style={{ height: kbInset }} data-testid="kb-spacer" aria-hidden="true" />
         </div>
       ) : !thread ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-slate-400 dark:text-slate-500">
-          <svg viewBox="0 0 24 24" className="w-10 h-10 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <IconMessages className="w-10 h-10" strokeWidth={1.5} />
           {T('Select a conversation to start messaging', '选择一个对话开始发送消息')}
         </div>
       ) : (
@@ -863,10 +1089,7 @@ export default function ConversationView({
                 title={T('Back', '返回')}
                 aria-label={T('Back', '返回')}
               >
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="19" y1="12" x2="5" y2="12" />
-                  <polyline points="12 19 5 12 12 5" />
-                </svg>
+                <IconBack className="w-6 h-6" />
               </button>
             )}
             <button
@@ -901,7 +1124,112 @@ export default function ConversationView({
                 </svg>
               </button>
             )}
+            <button
+              ref={searchToggleRef}
+              type="button"
+              onClick={toggleSearch}
+              className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition ${
+                searchOpen
+                  ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400'
+                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}
+              title={T('Search in conversation', '在对话中搜索')}
+              aria-label={T('Search in conversation', '在对话中搜索')}
+            >
+              <IconSearch className="w-6 h-6" strokeWidth={1.8} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onPin && onPin(!thread.pinned)}
+              className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition ${
+                thread.pinned
+                  ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400'
+                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}
+              title={thread.pinned ? T('Unpin', '取消置顶') : T('Pin conversation', '置顶对话')}
+              aria-label={T('Pin conversation', '置顶对话')}
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 17v5" />
+                <path d="M9 4h6l-1 6a2 2 0 0 0 .6 1.4L17 14H7l2.4-2.6A2 2 0 0 0 10 10L9 4z" />
+              </svg>
+            </button>
+            <div ref={exportRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setExportOpen((v) => !v)}
+                className="w-11 h-11 shrink-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition"
+                title={T('Export conversation', '导出对话')}
+                aria-label={T('Export conversation', '导出对话')}
+              >
+                <IconDownload className="w-6 h-6" strokeWidth={1.8} />
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 z-30 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade">
+                  <button
+                    type="button"
+                    onClick={() => doExport('txt')}
+                    className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                  >
+                    {T('Export as TXT', '导出为 TXT')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => doExport('csv')}
+                    className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                  >
+                    {T('Export as CSV', '导出为 CSV')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
+          {searchOpen && (
+            <div ref={searchPanelRef} className="px-3 sm:px-5 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 animate-fade">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5">
+                <IconSearch className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => doSearch(e.target.value)}
+                  placeholder={T('Search messages…', '搜索消息…')}
+                  className="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                  autoFocus
+                />
+                {searching && (
+                  <span className="block w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-primary rounded-full animate-spin shrink-0" />
+                )}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-2 max-h-52 overflow-y-auto space-y-1">
+                  {searchResults.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => goToMessage(r.id)}
+                      className="w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                    >
+                      <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        r.direction === 'out'
+                          ? 'bg-primary/10 text-primary dark:text-indigo-300'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'
+                      }`}>
+                        {r.direction === 'out' ? T('You', '我') : T('In', '收')}
+                      </span>
+                      <span className="min-w-0 flex-1 text-slate-700 dark:text-slate-200 line-clamp-2 break-words text-[13px]">
+                        {r.media_url ? `[Image] ${r.body || ''}` : r.body}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!searching && searchQuery.trim() && searchResults.length === 0 && (
+                <div className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500 py-2">
+                  {T('No matches', '没有匹配结果')}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="relative flex-1 min-h-0 flex flex-col">
             <div
@@ -981,7 +1309,7 @@ export default function ConversationView({
           </div>
 
           {composerBar(submitDraft, 'draft')}
-          {kbInset > 0 && <div className="w-full shrink-0" style={{ height: kbInset }} data-testid="kb-spacer" />}
+          <div className="w-full shrink-0 kb-spacer" style={{ height: kbInset }} data-testid="kb-spacer" aria-hidden="true" />
         </>
       )}
 
@@ -990,6 +1318,14 @@ export default function ConversationView({
       <BottomSheet open={!!actionsFor} onClose={closeActions} ariaLabel={T('Message actions', '消息操作')}>
         {actionsFor && (
           <div className="py-1" data-testid="message-actions">
+            <button
+              type="button"
+              onClick={() => setReactFor(actionsFor)}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+            >
+              <span className="w-5 h-5 shrink-0 flex items-center justify-center text-base leading-none">😊</span>
+              {actionsFor.reaction ? T('Change reaction', '更改表情回应') : T('React', '表情回应')}
+            </button>
             {actionsFor.mediaUrl && (
               <button
                 type="button"
@@ -999,11 +1335,7 @@ export default function ConversationView({
                 }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
+                <IconDownload className="w-5 h-5 shrink-0" strokeWidth={2} />
                 {T('Save image', '保存图片')}
               </button>
             )}
@@ -1012,10 +1344,7 @@ export default function ConversationView({
               onClick={() => copyMessage(actionsFor)}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
             >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
+              <IconCopy className="w-5 h-5 shrink-0" strokeWidth={2} />
               {T('Copy', '复制')}
             </button>
             {actionsFor.direction === 'out' && actionsFor.status === 'failed' && onRetry && (
@@ -1027,11 +1356,23 @@ export default function ConversationView({
                 }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
+                <IconRefresh className="w-5 h-5 shrink-0" strokeWidth={2} />
                 {T('Retry', '重试')}
+              </button>
+            )}
+            {actionsFor.status === 'scheduled' && (
+              <button
+                type="button"
+                onClick={() => cancelSchedule(actionsFor)}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
+              >
+                <span className="w-5 h-5 shrink-0 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                </span>
+                {T('Cancel schedule', '取消定时')}
               </button>
             )}
             <button
@@ -1039,11 +1380,7 @@ export default function ConversationView({
               onClick={() => openDetails(actionsFor)}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition min-h-11"
             >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
+              <IconInfo className="w-5 h-5 shrink-0" strokeWidth={2} />
               {T('Details', '详情')}
             </button>
             <button
@@ -1055,12 +1392,48 @@ export default function ConversationView({
                   : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
               }`}
             >
-              <svg viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${deleteArmed ? 'text-white' : 'text-rose-500 dark:text-rose-400'}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
+              <IconTrash className={`w-5 h-5 shrink-0 ${deleteArmed ? 'text-white' : 'text-rose-500 dark:text-rose-400'}`} strokeWidth={2} />
               {deleteArmed ? T('Tap again to confirm', '再次点击确认删除') : T('Delete', '删除')}
             </button>
+          </div>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!reactFor}
+        onClose={() => setReactFor(null)}
+        title={T('Add reaction', '添加表情回应')}
+        ariaLabel={T('Add reaction', '添加表情回应')}
+      >
+        {reactFor && (
+          <div className="py-3" data-testid="reaction-picker">
+            <div className="grid grid-cols-4 gap-2">
+              {REACTION_OPTIONS.map((em) => {
+                const active = reactFor.reaction === em;
+                return (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => toggleReaction(reactFor, em)}
+                    className={`w-full aspect-square rounded-2xl text-3xl flex items-center justify-center transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                      active ? 'bg-indigo-50 dark:bg-indigo-950/50 ring-2 ring-indigo-400/60' : ''
+                    }`}
+                    aria-label={em}
+                  >
+                    {em}
+                  </button>
+                );
+              })}
+            </div>
+            {reactFor.reaction && (
+              <button
+                type="button"
+                onClick={() => toggleReaction(reactFor, reactFor.reaction)}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition min-h-11"
+              >
+                {T('Remove reaction', '移除表情回应')}
+              </button>
+            )}
           </div>
         )}
       </BottomSheet>

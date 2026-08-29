@@ -35,6 +35,7 @@ export default function AdminPage() {
   const { lang } = useLanguage();
   const { theme } = useTheme();
   const [section, setSection] = useState('overview');
+  const [navOpen, setNavOpen] = useState(false);
   const isZh = lang === 'zh';
   const T = (en, zh) => (isZh ? zh : en);
 
@@ -71,20 +72,29 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="h-screen flex bg-slate-50">
-      <aside className="w-56 border-r border-slate-200 bg-white flex flex-col shrink-0">
-        <div className="h-14 border-b border-slate-200 flex items-center gap-2.5 px-4">
-          <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">N</span>
-          <span className="font-semibold text-slate-900">{theme.siteName || 'NexSMS'}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold">ADMIN</span>
+    <div className="h-dvh flex bg-slate-50 dark:bg-slate-950">
+      {navOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />
+      )}
+      <aside
+        className={`w-56 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col shrink-0 fixed lg:static inset-y-0 left-0 z-40 transition-transform lg:translate-x-0 ${
+          navOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5 px-4">
+          <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">
+            {theme.logo ? <img src={theme.logo} alt="" className="w-4 h-4 object-contain" /> : (theme.siteName || 'NexSMS').charAt(0)}
+          </span>
+          <span className="font-semibold text-slate-900 dark:text-white">{theme.siteName || 'NexSMS'}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold">ADMIN</span>
         </div>
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
           {SECTIONS.map(({ key, icon }) => (
             <button
               key={key}
-              onClick={() => setSection(key)}
+              onClick={() => { setSection(key); setNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                section === key ? 'text-white' : 'text-slate-600 hover:bg-slate-50'
+                section === key ? 'text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
               }`}
               style={section === key ? { background: theme.primary } : {}}
             >
@@ -93,8 +103,8 @@ export default function AdminPage() {
             </button>
           ))}
         </nav>
-        <div className="border-t border-slate-200 p-3">
-          <div className="text-xs text-slate-500 mb-2 truncate">{user?.email}</div>
+        <div className="border-t border-slate-200 dark:border-slate-800 p-3">
+          <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 truncate">{user?.email}</div>
           <button
             onClick={logout}
             className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-red-500 hover:bg-red-50 transition"
@@ -103,7 +113,22 @@ export default function AdminPage() {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="lg:hidden sticky top-0 z-20 flex items-center gap-2 mb-3 -mx-1 px-1 py-3 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur">
+          <button
+            onClick={() => setNavOpen(true)}
+            aria-label="Open admin menu"
+            className="p-2 -ml-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="font-semibold text-slate-900 dark:text-white">{names[section]}</span>
+          {user?.email && <span className="ml-auto text-xs text-slate-400 truncate max-w-[45%]">{user.email}</span>}
+        </div>
         {render()}
       </main>
     </div>

@@ -24,11 +24,12 @@ router.use(authenticate);
 // GET conversation list for current user
 router.get('/conversations', async (req, res) => {
   const { rows } = await query(
-    `SELECT c.*, n.number AS assigned_number
+    `SELECT c.*, n.number AS assigned_number,
+            EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.media_url IS NOT NULL) AS has_media
      FROM conversations c
      JOIN numbers n ON n.id = c.number_id
      WHERE c.user_id = $1 AND c.archived = FALSE
-     ORDER BY c.updated_at DESC`,
+     ORDER BY c.pinned DESC, c.updated_at DESC`,
     [req.user.id]
   );
   res.json({ conversations: rows });
@@ -46,13 +47,27 @@ router.get('/conversations/:id/messages', asyncRoute(async (req, res) => {
   );
   if (!conv.length) return res.status(404).json({ error: 'Conversation not found' });
 
+  // Mark inbound messages as read for this user (read receipt)
+  const { rows: unreadIn } = await query(
+    `UPDATE messages SET read_at = NOW()
+     WHERE conversation_id = $1 AND direction = 'in' AND read_at IS NULL
+     RETURNING id`,
+    [req.params.id]
+  );
   await query('UPDATE conversations SET unread_count = 0 WHERE id = $1', [req.params.id]);
+  if (unreadIn.length) {
+    publishRealtime(req.user.id, {
+      type: 'messages.read',
+      conversationId: req.params.id,
+      messageIds: unreadIn.map((r) => r.id),
+    });
+  }
 
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
   const before = req.query.before;
 
   const params = [req.params.id];
-  let sql = `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, media_url, created_at AS time
+  let sql = `SELECT id, direction, body, status, cost, scheduled_at, delivered_at, error, media_url, reaction, read_at, created_at AS time
              FROM messages WHERE conversation_id = $1`;
   if (before) {
     params.push(before);
@@ -95,6 +110,124 @@ router.post('/scheduled/:id/cancel', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Pin / unpin a conversation
+router.post('/conversations/:id/pin', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Conversation not found' });
+  const { pinned } = req.body;
+  const { rows } = await query(
+    `UPDATE conversations SET pinned = $2, updated_at = NOW()
+     WHERE id = $1 AND user_id = $3 RETURNING id, pinned`,
+    [req.params.id, Boolean(pinned), req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Conversation not found' });
+  res.json({ conversation: rows[0] });
+}));
+
+// Favorite / unfavorite a conversation
+router.post('/conversations/:id/favorite', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Conversation not found' });
+  const { favorite } = req.body;
+  const { rows } = await query(
+    `UPDATE conversations SET favorite = $2, updated_at = NOW()
+     WHERE id = $1 AND user_id = $3 RETURNING id, favorite`,
+    [req.params.id, Boolean(favorite), req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Conversation not found' });
+  res.json({ conversation: rows[0] });
+}));
+
+// Set / clear a reaction on a message
+router.post('/:id/reaction', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Message not found' });
+  const reaction = (req.body?.reaction || '').trim().slice(0, 8);
+  const { rows } = await query(
+    `UPDATE messages m SET reaction = $2
+     FROM conversations c
+     WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $3
+     RETURNING m.id, m.conversation_id, m.reaction`,
+    [req.params.id, reaction || null, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+  const msg = rows[0];
+  publishRealtime(req.user.id, {
+    type: 'message.reaction',
+    conversationId: msg.conversation_id,
+    message: { id: msg.id, reaction: msg.reaction },
+  });
+  res.json({ message: { id: msg.id, reaction: msg.reaction } });
+}));
+
+// Search within a conversation
+router.get('/conversations/:id/search', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Conversation not found' });
+  const { rows: conv } = await query(
+    'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
+    [req.params.id, req.user.id]
+  );
+  if (!conv.length) return res.status(404).json({ error: 'Conversation not found' });
+
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json({ results: [] });
+
+  const { rows } = await query(
+    `SELECT id, body, direction, media_url, created_at AS time
+     FROM messages
+     WHERE conversation_id = $1 AND body ILIKE $2
+     ORDER BY created_at ASC LIMIT 200`,
+    [req.params.id, `%${q}%`]
+  );
+  res.json({ results: rows });
+}));
+
+// Export a conversation as txt or csv
+router.get('/conversations/:id/export', asyncRoute(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ error: 'Conversation not found' });
+  const { rows: conv } = await query(
+    `SELECT c.contact_number, n.number AS from_number
+     FROM conversations c JOIN numbers n ON n.id = c.number_id
+     WHERE c.id = $1 AND c.user_id = $2`,
+    [req.params.id, req.user.id]
+  );
+  if (!conv.length) return res.status(404).json({ error: 'Conversation not found' });
+
+  const { rows } = await query(
+    `SELECT direction, body, status, media_url, created_at
+     FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
+    [req.params.id]
+  );
+
+  const format = req.query.format === 'csv' ? 'csv' : 'txt';
+  const safe = (s) => String(s ?? '').replace(/["\r\n]/g, ' ');
+
+  let content;
+  let mime;
+  let ext;
+  if (format === 'csv') {
+    content = ['date,direction,status,body', ...rows.map((m) => [
+      new Date(m.created_at).toISOString(),
+      m.direction,
+      m.status,
+      safe(m.media_url ? `[Image] ${safe(m.body)}` : m.body),
+    ].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+    mime = 'text/csv';
+    ext = 'csv';
+  } else {
+    content = rows.map((m) => {
+      const dir = m.direction === 'in' ? '<' : '>';
+      const stamp = new Date(m.created_at).toLocaleString();
+      const text = m.media_url ? `[Image] ${m.body || ''}`.trim() : m.body;
+      return `${stamp} ${dir} ${text}`;
+    }).join('\n');
+    mime = 'text/plain';
+    ext = 'txt';
+  }
+
+  const filename = `conversation-${conv[0].contact_number.replace(/[^0-9]/g, '')}.${ext}`;
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(content);
+}));
+
 // Create conversation
 router.post('/conversations', async (req, res) => {
   const { numberId, contactNumber } = req.body;
@@ -123,7 +256,7 @@ router.post('/send', async (req, res) => {
   let numberId = fromNumberId;
   let contactNumber = to;
 
-  if (!body || !body.trim()) return res.status(400).json({ error: 'Message body required' });
+  if ((!body || !body.trim()) && !media_url) return res.status(400).json({ error: 'Message body required' });
 
   try {
     // Resolve or create conversation
@@ -249,11 +382,12 @@ router.post('/send', async (req, res) => {
 
 // User analytics: volume, cost, delivery rate + daily series
 router.get('/analytics', async (req, res) => {
-  const [totals, daily] = await Promise.all([
+  const [totals, daily, byStatus, topNumbers] = await Promise.all([
     query(
       `SELECT COUNT(*)::int AS count,
               COUNT(*) FILTER (WHERE status IN ('sent','delivered'))::int AS delivered,
               COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+              COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
               COALESCE(SUM(cost),0)::numeric AS cost
        FROM messages m JOIN conversations c ON c.id = m.conversation_id
        WHERE c.user_id = $1`,
@@ -264,12 +398,29 @@ router.get('/analytics', async (req, res) => {
               COUNT(*)::int AS count,
               COUNT(*) FILTER (WHERE m.status IN ('sent','delivered'))::int AS delivered
        FROM messages m JOIN conversations c ON c.id = m.conversation_id
-       WHERE c.user_id = $1 AND m.created_at >= NOW() - interval '14 days'
+       WHERE c.user_id = $1 AND m.created_at >= NOW() - interval '30 days'
        GROUP BY day ORDER BY day`,
       [req.user.id]
     ),
+    query(
+      `SELECT m.status, COUNT(*)::int AS count
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.user_id = $1
+       GROUP BY m.status ORDER BY count DESC`,
+      [req.user.id]
+    ),
+    query(
+      `SELECT n.number, COUNT(*)::int AS count, COALESCE(SUM(m.cost),0)::numeric AS cost
+       FROM messages m
+       JOIN conversations c ON c.id = m.conversation_id
+       JOIN numbers n ON n.id = c.number_id
+       WHERE c.user_id = $1
+       GROUP BY n.number
+       ORDER BY count DESC LIMIT 5`,
+      [req.user.id]
+    ),
   ]);
-  res.json({ totals: totals.rows[0], daily: daily.rows });
+  res.json({ totals: totals.rows[0], daily: daily.rows, byStatus: byStatus.rows, topNumbers: topNumbers.rows });
 });
 
 // Bulk blast — send the same body to many recipients from one number.
@@ -364,6 +515,23 @@ router.get('/:id', asyncRoute(async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: 'Message not found' });
   res.json({ message: rows[0] });
+}));
+
+// Bulk delete (soft-delete / archive) conversations for the current user
+router.delete('/conversations', asyncRoute(async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id) => UUID_RE.test(id)) : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  const { rows } = await query(
+    `UPDATE conversations SET archived = TRUE, updated_at = NOW()
+     WHERE user_id = $1 AND id = ANY($2::uuid[]) AND archived = FALSE
+     RETURNING id`,
+    [req.user.id, ids]
+  );
+  const deletedIds = rows.map((r) => r.id);
+  if (deletedIds.length) {
+    publishRealtime(req.user.id, { type: 'conversations.deleted', ids: deletedIds });
+  }
+  res.json({ deleted: deletedIds.length });
 }));
 
 // DELETE a single message (hard delete) owned by the current user

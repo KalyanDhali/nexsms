@@ -38,11 +38,11 @@ export default function ApiKeysSection() {
       <Toast message={toast} />
       <Card>
         {!keys.length ? (
-          <p className="text-sm text-slate-400">{T('No API keys', '暂无 API 密钥')}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">{T('No API keys', '暂无 API 密钥')}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-100">
+              <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
                 <th className="py-2 font-medium">{T('User', '用户')}</th>
                 <th className="py-2 font-medium">{T('Name', '名称')}</th>
                 <th className="py-2 font-medium">{T('Key', '密钥')}</th>
@@ -53,11 +53,11 @@ export default function ApiKeysSection() {
             <tbody>
               {keys.map((k) => (
                 <tr key={k.id} className="border-b border-slate-50">
-                  <td className="py-2 text-slate-800">{k.email}</td>
-                  <td className="py-2 text-slate-500">{k.name}</td>
-                  <td className="py-2 font-mono text-xs text-slate-500">{k.prefix}••••</td>
+                  <td className="py-2 text-slate-800 dark:text-slate-100">{k.email}</td>
+                  <td className="py-2 text-slate-500 dark:text-slate-400">{k.name}</td>
+                  <td className="py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{k.prefix}••••</td>
                   <td className="py-2">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${k.active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${k.active ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/40 text-red-500'}`}>
                       {k.active ? T('Active', '活跃') : T('Revoked', '已撤销')}
                     </span>
                   </td>

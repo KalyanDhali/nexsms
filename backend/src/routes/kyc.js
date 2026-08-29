@@ -37,10 +37,27 @@ router.post('/', async (req, res) => {
   res.status(201).json({ ok: true, message: 'Submission received, awaiting review' });
 });
 
-// GET /api/referral — my referral code + link
+// GET /api/referral — my referral code + link + stats
 router.get('/referral', async (req, res) => {
   const code = await ensureReferralCode(req.user.id);
-  res.json({ code, url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/register?ref=${code}` });
+  const [counts, earnings] = await Promise.all([
+    query(
+      `SELECT COUNT(*)::int AS count
+       FROM referrals WHERE referrer_id = $1`,
+      [req.user.id]
+    ),
+    query(
+      `SELECT COALESCE(SUM(bonus),0)::numeric AS earnings
+       FROM referrals WHERE referrer_id = $1 AND status = 'paid'`,
+      [req.user.id]
+    ),
+  ]);
+  res.json({
+    code,
+    url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/register?ref=${code}`,
+    count: counts.rows[0].count,
+    earnings: Number(earnings.rows[0].earnings),
+  });
 });
 
 export default router;

@@ -65,6 +65,7 @@ async function seed() {
     ['bulk_blast', true, {}], ['ai_features', true, {}], ['user_api', true, {}],
     ['sms_scheduling', true, {}], ['mm_support', false, {}], ['kyc_required', false, {}],
     ['self_assign', true, {}], ['admin_ip_whitelist', false, {}],
+    ['did_store', true, {}],
   ];
 
   for (const [key, enabled, cfg] of toggles) {

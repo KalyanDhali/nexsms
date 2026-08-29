@@ -4,6 +4,7 @@ import { getProviderAdapter } from '../adapters/index.js';
 import { categorizeMessage, findAutoReply } from '../services/aiEngine.js';
 import { fireWebhook } from '../services/webhookDelivery.js';
 import { publishRealtime, publishInboundMessage } from '../services/realtime.js';
+import { notifyOnInbound } from '../services/notificationService.js';
 
 const router = Router();
 
@@ -111,8 +112,28 @@ async function handleInboundMessage({ providerId, to, from, body, sid }) {
     createdAt: msgRows[0].created_at,
   });
 
+  // In-app notification for the inbound SMS
+  await notifyOnInbound(number.assigned_user_id, from, body);
+
+  // Read receipt: when the contact replies, our previous outbound
+  // messages in this thread count as read.
+  const { rows: readRows } = await query(
+    `UPDATE messages SET read_at = NOW()
+     WHERE conversation_id = $1 AND direction = 'out' AND read_at IS NULL
+       AND status IN ('sent','delivered')
+     RETURNING id`,
+    [conversationId]
+  );
+  if (readRows.length) {
+    publishRealtime(number.assigned_user_id, {
+      type: 'messages.read',
+      conversationId,
+      messageIds: readRows.map((r) => r.id),
+    });
+  }
+
   // Smart auto-reply (config-driven, gated by ai_features toggle)
-  const reply = await findAutoReply(number.assigned_user_id, body);
+  const reply = await findAutoReply(number.assigned_user_id, body, number.id);
   if (reply) {
     try {
       const { rows: msg } = await query(

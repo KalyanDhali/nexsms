@@ -9,6 +9,7 @@ import {
   cancelSubscription,
   createPaymentOrder,
 } from '../services/billingService.js';
+import { preparePayment } from '../services/paymentGatewayService.js';
 
 const router = Router();
 
@@ -87,7 +88,12 @@ router.post('/subscribe', authenticate, async (req, res) => {
       reference: `sub:${planId}`,
       referenceType: 'subscription',
     });
-    return res.status(201).json({ order: { id: order.id, amount: order.amount, currency: order.currency, status: order.status, expires_at: order.expires_at }, gateway: { name: gateway.name, slug: gateway.slug, type: gateway.type } });
+    const payment = await preparePayment(order, gateway);
+    return res.status(201).json({
+      order: { id: order.id, amount: order.amount, currency: order.currency, status: order.status, expires_at: order.expires_at },
+      gateway: { name: gateway.name, slug: gateway.slug, type: gateway.type },
+      payment,
+    });
   } catch (err) {
     if (err.code === 'PLAN_NOT_FOUND') return res.status(404).json({ error: err.message });
     if (err.code === 'GATEWAY_NOT_FOUND' || err.code === 'GATEWAY_DISABLED') return res.status(400).json({ error: err.message });
@@ -111,6 +117,52 @@ router.get('/transactions', authenticate, async (req, res) => {
     [req.user.id]
   );
   res.json({ transactions: rows });
+});
+
+// Daily bonus — claim status for today
+router.get('/bonus/status', authenticate, async (req, res) => {
+  const { rows: settings } = await query(`SELECT value FROM settings WHERE key = 'daily_bonus'`);
+  const amount = Number(settings[0]?.value?.amount || 0.25);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { rows: claims } = await query(
+    `SELECT amount FROM daily_bonus_claims WHERE user_id = $1 AND claim_date = $2`,
+    [req.user.id, today]
+  );
+  res.json({
+    amount,
+    currency: 'USD',
+    claimed: claims.length > 0,
+    lastClaimedAt: claims.length ? today : null,
+  });
+});
+
+// Claim the daily bonus (once per UTC day)
+router.post('/bonus/claim', authenticate, async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { rows: settings } = await query(`SELECT value FROM settings WHERE key = 'daily_bonus'`);
+  const amount = Math.max(0.01, Number(settings[0]?.value?.amount || 0.25));
+
+  const { rows: existing } = await query(
+    `SELECT 1 FROM daily_bonus_claims WHERE user_id = $1 AND claim_date = $2`,
+    [req.user.id, today]
+  );
+  if (existing.length) return res.status(409).json({ error: 'Already claimed today' });
+
+  await query(`UPDATE users SET balance = balance + $2 WHERE id = $1`, [req.user.id, amount]);
+  const { rows: after } = await query('SELECT balance FROM users WHERE id = $1', [req.user.id]);
+  await query(
+    `INSERT INTO transactions (user_id, type, amount, balance_after, reference, status)
+     VALUES ($1, 'daily_bonus', $2, $3, $4, 'completed')`,
+    [req.user.id, amount, after[0].balance, `daily:${today}`]
+  );
+  await query(
+    `INSERT INTO daily_bonus_claims (user_id, claim_date, amount) VALUES ($1, $2, $3)`,
+    [req.user.id, today, amount]
+  );
+
+  res.status(201).json({ ok: true, amount, balance: after[0].balance });
 });
 
 export default router;

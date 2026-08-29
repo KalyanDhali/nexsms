@@ -17,7 +17,12 @@ export async function sendSmsWithFailover({ from, to, body, countryCode, mediaUr
   // International routing: providers that declare support for this
   // country are tried first (kept in priority order), others after.
   const country = countryCode?.toUpperCase();
-  let ordered = providers.filter((p) => p.health !== 'down');
+  const all = [...providers];
+  const healthy = all.filter((p) => p.health !== 'down');
+  // Prefer healthy providers, but never hard-fail just because every
+  // provider is currently flagged 'down' — that flag may be stale, so
+  // still attempt the failover chain so a recovered provider can serve.
+  let ordered = healthy.length ? healthy : all;
   if (country) {
     const supporting = ordered.filter((p) => Array.isArray(p.supported_countries) && p.supported_countries.includes(country));
     const rest = ordered.filter((p) => !supporting.includes(p));

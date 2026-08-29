@@ -11,6 +11,7 @@ export default function SettingsSection() {
   const [settings, setSettings] = useState({});
   const [toggles, setToggles] = useState([]);
   const [theme, setTheme] = useState({});
+  const [siteName, setSiteName] = useState('NexSMS');
   const [smsRate, setSmsRate] = useState('');
   const [payPerSmsDaily, setPayPerSmsDaily] = useState('');
   const [burstPerSec, setBurstPerSec] = useState('');
@@ -31,6 +32,7 @@ export default function SettingsSection() {
         setBilling(b.billing);
         setSettings(s.settings);
         setTheme(s.settings.theme || {});
+        setSiteName(s.settings.site_name?.value || 'NexSMS');
         setToggles(tg.toggles);
         setSmsRate(s.settings.sms_rate?.rate ?? '');
         setPayPerSmsDaily(s.settings.pay_per_sms_limit?.daily ?? '');
@@ -48,7 +50,10 @@ export default function SettingsSection() {
   };
 
   const saveTheme = async () => {
-    await updateSetting('theme', theme);
+    await Promise.all([
+      updateSetting('theme', theme),
+      updateSetting('site_name', { value: siteName }),
+    ]);
     notify(T('Theme saved', '主题已保存'));
   };
 
@@ -105,10 +110,10 @@ export default function SettingsSection() {
 
       {billing && (
         <Card className="mb-5">
-          <h3 className="font-semibold text-slate-900 mb-3">{T('Billing modes', '计费模式')}</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Billing modes', '计费模式')}</h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {['prepaid', 'subscription', 'hybrid'].map((mode) => (
-              <label key={mode} className="flex items-center gap-2 text-sm text-slate-700">
+              <label key={mode} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                 <input type="checkbox" checked={!!billing[mode]} onChange={(e) => setBilling({ ...billing, [mode]: e.target.checked })} />
                 {mode}
               </label>
@@ -125,21 +130,38 @@ export default function SettingsSection() {
       )}
 
       <Card className="mb-5">
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Theme', '主题')}</h3>
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Theme & branding', '主题与品牌')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Field label={T('Primary color', '主色')}><input type="color" value={theme.primaryColor || '#4F46E5'} onChange={(e) => setTheme({ ...theme, primaryColor: e.target.value })} className="h-9 w-full rounded-lg border border-slate-200 cursor-pointer" /></Field>
-          <Field label={T('Secondary color', '辅色')}><input type="color" value={theme.secondaryColor || '#7C3AED'} onChange={(e) => setTheme({ ...theme, secondaryColor: e.target.value })} className="h-9 w-full rounded-lg border border-slate-200 cursor-pointer" /></Field>
+          <Field label={T('Site name', '站点名称')}>
+            <TextInput value={siteName} onChange={(e) => setSiteName(e.target.value)} />
+          </Field>
+          <Field label={T('Logo URL', 'Logo 链接')}>
+            <TextInput value={theme.logo || ''} placeholder="https://…/logo.png" onChange={(e) => setTheme({ ...theme, logo: e.target.value })} />
+          </Field>
+          <Field label={T('Primary color', '主色')}><input type="color" value={theme.primaryColor || '#4F46E5'} onChange={(e) => setTheme({ ...theme, primaryColor: e.target.value })} className="h-9 w-full rounded-lg border border-slate-200 dark:border-slate-800 cursor-pointer" /></Field>
+          <Field label={T('Secondary color', '辅色')}><input type="color" value={theme.secondaryColor || '#7C3AED'} onChange={(e) => setTheme({ ...theme, secondaryColor: e.target.value })} className="h-9 w-full rounded-lg border border-slate-200 dark:border-slate-800 cursor-pointer" /></Field>
           <Field label={T('Font', '字体')}>
             <SelectInput value={theme.font || 'Inter'} onChange={(e) => setTheme({ ...theme, font: e.target.value })}>
               {['Inter', 'Roboto', 'Poppins', 'Georgia', 'monospace'].map((f) => <option key={f} value={f}>{f}</option>)}
             </SelectInput>
           </Field>
-          <div className="flex items-end"><Button onClick={saveTheme}>{T('Save theme', '保存主题')}</Button></div>
+        </div>
+        <div className="mt-4 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+              style={{ background: `linear-gradient(to bottom right, ${theme.primaryColor || '#4F46E5'}, ${theme.secondaryColor || '#7C3AED'})` }}>
+              {theme.logo ? <img src={theme.logo} alt="" className="w-4 h-4 object-contain" /> : (siteName || 'NexSMS').charAt(0)}
+            </span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-white" style={{ fontFamily: theme.font }}>{siteName || 'NexSMS'}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold">ADMIN</span>
+          </div>
+          <span className="text-xs text-slate-400 dark:text-slate-500">{T('Header preview', '顶部预览')}</span>
+          <Button onClick={saveTheme}>{T('Save theme', '保存主题')}</Button>
         </div>
       </Card>
 
       <Card className="mb-5">
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Rates', '费率')}</h3>
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Rates', '费率')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Field label={T('SMS rate ($)', '短信费率(美元)')}><TextInput type="number" step="0.0001" value={smsRate} onChange={(e) => setSmsRate(e.target.value)} /></Field>
           <Field label={T('Pay-per-SMS daily limit', '按条计费每日上限')}><TextInput type="number" value={payPerSmsDaily} onChange={(e) => setPayPerSmsDaily(e.target.value)} /></Field>
@@ -149,7 +171,7 @@ export default function SettingsSection() {
       </Card>
 
       <Card className="mb-5">
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Currency rates', '汇率')}</h3>
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Currency rates', '汇率')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
           <Field label={T('Base currency', '基础货币')}>
             <TextInput value={currency.base || 'USD'} onChange={(e) => setCurrency({ ...currency, base: e.target.value.toUpperCase() })} />
@@ -162,13 +184,13 @@ export default function SettingsSection() {
           ))}
           <div className="flex items-end"><Button onClick={saveCurrency}>{T('Save', '保存')}</Button></div>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
           {T('1 base = N alt (e.g. USDT 1, BTC 0.000015). QR/instructions convert automatically.', '1 基础货币 = N 其他币种（如 USDT 1，BTC 0.000015）。二维码与付款说明将自动换算。')}
         </p>
       </Card>
 
       <Card className="mb-5">
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Fraud thresholds', '防欺诈门槛')}</h3>
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Fraud thresholds', '防欺诈门槛')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Field label={T('Hold score threshold (auto-HOLD)', '冻结分数门槛(自动HOLD)')}>
             <TextInput type="number" value={holdThreshold} onChange={(e) => setHoldThreshold(e.target.value)} />
@@ -178,14 +200,14 @@ export default function SettingsSection() {
       </Card>
 
       <Card>
-        <h3 className="font-semibold text-slate-900 mb-3">{T('Feature toggles', '功能开关')}</h3>        <div className="grid md:grid-cols-3 gap-6">
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">{T('Feature toggles', '功能开关')}</h3>        <div className="grid md:grid-cols-3 gap-6">
           {groups.map((grp) => (
             <div key={grp}>
-              <h4 className="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2">{groupLabels[grp] || grp}</h4>
+              <h4 className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-2">{groupLabels[grp] || grp}</h4>
               <div className="space-y-2">
                 {toggles.filter((t) => groupFor(t.key) === grp).map((t) => (
                   <label key={t.key} className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
-                    <span className="text-sm text-slate-700 font-mono">{t.key}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-200 font-mono">{t.key}</span>
                     <input type="checkbox" checked={t.enabled} onChange={(e) => toggle(t.key, e.target.checked)} className="w-4 h-4 accent-indigo-600" />
                   </label>
                 ))}

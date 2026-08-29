@@ -5,9 +5,9 @@ import { adminGetKyc, adminApproveKyc, adminRejectKyc } from '../../services/api
 import { Badge, Button, Field, SectionHeader, Toast, Table, Card } from './ui.jsx';
 
 const STATUS_STYLE = {
-  pending: { bg: 'bg-amber-50', text: 'text-amber-600' },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-500' },
+  pending: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  approved: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400' },
+  rejected: { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-500' },
 };
 
 export default function KycSection() {
@@ -67,7 +67,7 @@ export default function KycSection() {
             <button
               key={f}
               onClick={() => { setFilter(f); load(f); }}
-              className={`px-3 py-1.5 text-sm rounded-lg transition ${filter === f ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-3 py-1.5 text-sm rounded-lg transition ${filter === f ? 'text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
               style={filter === f ? { background: theme.primary } : {}}
             >
               {f === 'pending' ? T('Pending', '待审核') : f === 'approved' ? T('Approved', '已通过') : T('Rejected', '已拒绝')}
@@ -76,15 +76,15 @@ export default function KycSection() {
         </div>
       </Card>
 
-      <Table columns={[T('User', '用户'), T('Name', '姓名'), T('Document', '证件'), T('Submitted', '提交时间'), T('Status', '状态'), T('Actions', '操作')]}>
+      <Table head={[T('User', '用户'), T('Name', '姓名'), T('Document', '证件'), T('Submitted', '提交时间'), T('Status', '状态'), T('Actions', '操作')]}>
         {subs.length === 0 ? (
-          <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">{T('Nothing here', '暂无记录')}</td></tr>
+          <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">{T('Nothing here', '暂无记录')}</td></tr>
         ) : subs.map((s) => (
           <tr key={s.id}>
-            <td className="px-4 py-2.5 text-slate-800">{s.email}</td>
-            <td className="px-4 py-2.5 text-slate-700">{s.full_name}</td>
-            <td className="px-4 py-2.5 text-slate-600 text-sm">{docLabel(s.document_type)} · <span className="font-mono">{s.document_id}</span></td>
-            <td className="px-4 py-2.5 text-slate-500 text-sm">{new Date(s.submitted_at).toLocaleString()}</td>
+            <td className="px-4 py-2.5 text-slate-800 dark:text-slate-100">{s.email}</td>
+            <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{s.full_name}</td>
+            <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300 text-sm">{docLabel(s.document_type)} · <span className="font-mono">{s.document_id}</span></td>
+            <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-sm">{new Date(s.submitted_at).toLocaleString()}</td>
             <td className="px-4 py-2.5">
               <Badge bg={STATUS_STYLE[s.status]?.bg} color={STATUS_STYLE[s.status]?.text}>
                 {s.status}
@@ -98,12 +98,12 @@ export default function KycSection() {
                     value={rejectingId === s.id ? rejectNote : ''}
                     onChange={(e) => { setRejectingId(s.id); setRejectNote(e.target.value); }}
                     placeholder={T('Reason (optional)', '原因（可选）')}
-                    className="px-2 py-1 text-xs rounded-lg border border-slate-200 focus:outline-none"
+                    className="px-2 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-800 focus:outline-none"
                   />
                   <Button variant="danger" onClick={() => reject(s.id)}>{T('Reject', '拒绝')}</Button>
                 </div>
               ) : (
-                <span className="text-xs text-slate-400">{s.note || '—'}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">{s.note || '—'}</span>
               )}
             </td>
           </tr>
